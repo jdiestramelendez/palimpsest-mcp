@@ -18,6 +18,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use crate::core::retrieval::{self, SearchParams};
 use crate::db::queries::{self, NewMemory, MEMORY_KINDS};
 use crate::db::Db;
 use crate::error::Error;
@@ -69,6 +70,28 @@ pub struct SaveMemoryRequest {
     /// history but stops being returned by current-time searches.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supersedes: Option<i64>,
+}
+
+/// Parameters for `search_memory`.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct SearchMemoryRequest {
+    /// What to look for, in natural language. Both semantic similarity and
+    /// exact terms are used.
+    pub query: String,
+    /// Project name, id, or alias to scope the search. Global memories are
+    /// always included. Omit to search across all projects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    /// Restrict to these kinds (fact | decision | preference | todo | insight).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kinds: Option<Vec<String>>,
+    /// Maximum results (default 8).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+    /// ISO 8601 instant for time-travel: return what was believed true at
+    /// that moment (e.g. "2026-08-01T12:00:00Z"). Omit for current facts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub as_of: Option<String>,
 }
 
 /// Build a tool-level error result with an agent-actionable message.
@@ -233,6 +256,95 @@ impl MemoryServer {
                 "importance": new.importance,
                 "superseded": req.supersedes,
             }))),
+            Err(e) => map_err(e),
+        }
+    }
+
+    /// Hybrid semantic + lexical search over memories.
+    #[tool(
+        name = "search_memory",
+        description = "Search memories with hybrid retrieval (semantic vectors + exact terms, rank-fused). Scope with `project` (global memories are always included), filter by `kinds`, and pass `as_of` to see what was believed true at a past instant. Returns matches ranked by relevance."
+    )]
+    pub async fn search_memory(
+        &self,
+        params: Parameters<SearchMemoryRequest>,
+    ) -> std::result::Result<CallToolResult, ErrorData> {
+        let req = params.0;
+        let query = req.query.trim().to_string();
+        if query.is_empty() {
+            return Ok(tool_error("query is empty. Describe what you are looking for."));
+        }
+        if let Some(kinds) = &req.kinds {
+            if let Some(bad) = kinds.iter().find(|k| !MEMORY_KINDS.contains(&k.as_str())) {
+                return Ok(tool_error(format!(
+                    "unknown kind '{bad}'. Use any of: {}.",
+                    MEMORY_KINDS.join(", ")
+                )));
+            }
+        }
+        // Malformed as_of is a protocol-level invalid_params per contract.
+        let as_of = match &req.as_of {
+            Some(raw) => Some(
+                retrieval::normalize_as_of(raw)
+                    .map_err(|e| ErrorData::invalid_params(e.to_string(), None))?,
+            ),
+            None => None,
+        };
+
+        let embedding = match self.embedder.embed(std::slice::from_ref(&query)).await {
+            Ok(mut v) if !v.is_empty() => v.remove(0),
+            Ok(_) => return Ok(tool_error("embedder returned no vector; retry.")),
+            Err(e) => return map_err(e),
+        };
+
+        let db = self.db.lock().await;
+        let conn = db.conn();
+
+        // Resolve project scoping; unknown project -> same guidance as
+        // get_project_state.
+        let project_id = match &req.project {
+            Some(name) => match queries::resolve_project(conn, name) {
+                Ok(Some(p)) => Some(p.id),
+                Ok(None) => {
+                    let existing = queries::list_project_ids(conn).unwrap_or_default();
+                    return Ok(tool_error(format!(
+                        "project '{name}' not found. Existing projects: {}. \
+                         Retry with one of these, or omit `project` to search everywhere.",
+                        if existing.is_empty() { "(none)".to_string() } else { existing.join(", ") }
+                    )));
+                }
+                Err(e) => return map_err(e),
+            },
+            None => None,
+        };
+
+        let search_params = SearchParams {
+            project_id,
+            kinds: req.kinds.clone(),
+            limit: req.limit.unwrap_or(8).clamp(1, 50),
+            as_of,
+        };
+        match retrieval::search(conn, &query, &embedding, &search_params) {
+            Ok(hits) => {
+                let results: Vec<serde_json::Value> = hits
+                    .iter()
+                    .map(|h| serde_json::json!({
+                        "memory_id": h.memory.id,
+                        "project_id": h.memory.project_id,
+                        "content": h.memory.content,
+                        "kind": h.memory.kind,
+                        "importance": h.memory.importance,
+                        "created_at": h.memory.created_at,
+                        "invalid_at": h.memory.invalid_at,
+                        "superseded_by": h.memory.superseded_by,
+                        "score": h.score,
+                    }))
+                    .collect();
+                Ok(CallToolResult::structured(serde_json::json!({
+                    "results": results,
+                    "count": results.len(),
+                })))
+            }
             Err(e) => map_err(e),
         }
     }
