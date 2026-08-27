@@ -170,6 +170,7 @@ impl MemoryServer {
         params: Parameters<GetProjectStateRequest>,
     ) -> std::result::Result<CallToolResult, ErrorData> {
         let project = params.0.project;
+        tracing::info!(%project, "get_project_state");
         let db = self.db.lock().await;
         let conn = db.conn();
 
@@ -221,6 +222,7 @@ impl MemoryServer {
         params: Parameters<SaveMemoryRequest>,
     ) -> std::result::Result<CallToolResult, ErrorData> {
         let req = params.0;
+        tracing::info!(project = ?req.project, supersedes = ?req.supersedes, "save_memory");
 
         let content = req.content.trim().to_string();
         if content.is_empty() {
@@ -299,6 +301,7 @@ impl MemoryServer {
         params: Parameters<SearchMemoryRequest>,
     ) -> std::result::Result<CallToolResult, ErrorData> {
         let req = params.0;
+        tracing::info!(project = ?req.project, as_of = ?req.as_of, "search_memory");
         let query = req.query.trim().to_string();
         if query.is_empty() {
             return Ok(tool_error("query is empty. Describe what you are looking for."));
@@ -388,6 +391,11 @@ impl MemoryServer {
         params: Parameters<EndSessionRequest>,
     ) -> std::result::Result<CallToolResult, ErrorData> {
         let req = params.0;
+        tracing::info!(
+            project = ?req.project,
+            transcript_len = req.transcript.len(),
+            "end_session"
+        );
         if req.transcript.trim().is_empty() {
             return Ok(tool_error(
                 "transcript is empty. Pass the session conversation (or a faithful summary of it).",

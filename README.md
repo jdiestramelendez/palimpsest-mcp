@@ -1,0 +1,117 @@
+# memory-mcp
+
+Persistent memory for coding agents, served over MCP. A single SQLite file
+stores project facts with full history (nothing is ever deleted — outdated
+facts are *superseded* and remain queryable via time-travel), retrieval is
+hybrid semantic + lexical (sqlite-vec KNN fused with FTS5 BM25 via
+Reciprocal Rank Fusion), and every project carries a living `STATE.md`
+document that is rewritten at the end of each session.
+
+## Tools
+
+| Tool | Purpose |
+|---|---|
+| `get_project_state` | Load a project's STATE.md, aliases and memory counts. Call at session start. |
+| `save_memory` | Save one durable fact (optionally superseding an outdated one). |
+| `search_memory` | Hybrid search with project scoping, kind filters and `as_of` time-travel. |
+| `end_session` | Persist the transcript, extract durable facts, rewrite STATE.md. |
+
+## Install
+
+```sh
+cargo build --release
+# binary at target/release/memory-mcp
+```
+
+Data lives in `~/.memory-mcp/` (`memory.db`, `config.toml`). Override the
+database location with `--db-path /path/to.db`.
+
+## Configuration — `~/.memory-mcp/config.toml`
+
+Everything is optional; the defaults use a local Ollama with no API keys.
+
+```toml
+# db_path = "/custom/path/memory.db"   # optional; --db-path wins over this
+
+[embedder]
+provider = "ollama"          # "ollama" | "openai"
+model = "nomic-embed-text"
+dims = 768                   # pinned into the DB at first creation;
+                             # changing it later requires re-embedding
+# base_url = "http://localhost:11434"
+# api_key_env = "OPENAI_API_KEY"      # env var read for cloud providers
+
+[extractor]
+provider = "ollama"          # "ollama" | "anthropic" | "openai"
+model = "qwen2.5:7b"         # e.g. "claude-haiku-4-5" / "gpt-4o-mini"
+# api_key_env = "ANTHROPIC_API_KEY"
+# base_url = ...
+```
+
+API keys are **never** stored in the file: `api_key_env` names an
+environment variable and the key is read from the process environment.
+
+Logs go to stderr (stdout is the MCP transport); set `RUST_LOG=debug` for
+verbose logging.
+
+## Register the server
+
+**Claude Code**
+
+```sh
+claude mcp add memory -- /absolute/path/to/target/release/memory-mcp
+```
+
+**Claude Desktop** — add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "/absolute/path/to/target/release/memory-mcp"
+    }
+  }
+}
+```
+
+**Cursor** — add to `~/.cursor/mcp.json` (or project `.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "/absolute/path/to/target/release/memory-mcp"
+    }
+  }
+}
+```
+
+## First 5 minutes
+
+1. **Save a memory** — in a session, say
+   *"Remember that this project deploys from the `release` branch only."*
+   The agent calls `save_memory`; you get back a `memory_id`.
+2. **Close the session** — say *"We're done, close out this session."*
+   The agent calls `end_session` with the transcript: facts are extracted,
+   deduplicated against what's already known, and STATE.md is rewritten.
+3. **Reopen** — start a fresh session and ask *"Where were we on
+   \<project\>?"* The agent calls `get_project_state` and answers from
+   STATE.md — including the deploy-branch fact from step 1.
+4. **Time-travel (optional)** — *"What did we believe about deployment last
+   month?"* → `search_memory` with `as_of` returns the facts that were
+   valid then, even if they've since been superseded.
+
+To make agents do this reliably, drop the skill template from
+`docs/skill-template/SKILL.md` into your project (e.g.
+`.claude/skills/memory/SKILL.md`).
+
+## Guarantees
+
+- **Append-only history**: no memory row is ever hard-deleted or edited;
+  corrections insert a replacement and stamp `invalid_at`/`superseded_by`
+  on the old row in the same transaction.
+- **Atomic writes**: the vector index row is inserted in the same
+  transaction as the memory row; FTS stays in sync via triggers.
+- **Validity-filtered retrieval**: searches only return currently-valid
+  facts (or the facts valid at `as_of`), and global memories
+  (`project_id IS NULL`) are always included alongside project scope.

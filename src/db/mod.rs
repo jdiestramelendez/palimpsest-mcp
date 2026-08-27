@@ -30,7 +30,12 @@ fn register_sqlite_vec() {
         // transmuted to the auto-extension signature exactly as the
         // sqlite-vec crate documents.
         unsafe {
-            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
+            type AutoExtensionFn = unsafe extern "C" fn(
+                *mut rusqlite::ffi::sqlite3,
+                *mut *mut std::os::raw::c_char,
+                *const rusqlite::ffi::sqlite3_api_routines,
+            ) -> std::os::raw::c_int;
+            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute::<*const (), AutoExtensionFn>(
                 sqlite_vec::sqlite3_vec_init as *const (),
             )));
         }
