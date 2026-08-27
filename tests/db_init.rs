@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use memory_mcp::db::Db;
+use palimpsest_mcp::db::Db;
 
 /// All tables and virtual tables the schema must create.
 const EXPECTED_TABLES: &[&str] = &[
@@ -17,7 +17,7 @@ const EXPECTED_TABLES: &[&str] = &[
 #[test]
 fn fresh_init_creates_all_tables() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("memory.db");
+    let path = dir.path().join("palimpsest.db");
     let db = Db::open(&path, 768).expect("open");
 
     let mut stmt = db
@@ -59,7 +59,7 @@ fn fresh_init_creates_all_tables() {
 #[test]
 fn reopen_preserves_data_and_skips_migrations() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("memory.db");
+    let path = dir.path().join("palimpsest.db");
 
     {
         let db = Db::open(&path, 768).expect("first open");
@@ -93,7 +93,7 @@ fn reopen_preserves_data_and_skips_migrations() {
 #[test]
 fn mismatched_dims_is_rejected_with_explanation() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("memory.db");
+    let path = dir.path().join("palimpsest.db");
     Db::open(&path, 768).expect("create at 768");
 
     let err = match Db::open(&path, 1536) {

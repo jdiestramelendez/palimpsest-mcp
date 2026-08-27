@@ -1,4 +1,4 @@
-//! memory-mcp binary entry point: load config, open the database, build
+//! palimpsest-mcp binary entry point: load config, open the database, build
 //! providers, and serve the MCP tool set over stdio.
 //!
 //! All logging goes to stderr — stdout belongs to the MCP transport.
@@ -6,17 +6,17 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use memory_mcp::config::Config;
-use memory_mcp::db::Db;
-use memory_mcp::providers;
-use memory_mcp::tools::MemoryServer;
+use palimpsest_mcp::config::Config;
+use palimpsest_mcp::db::Db;
+use palimpsest_mcp::providers;
+use palimpsest_mcp::tools::MemoryServer;
 use rmcp::ServiceExt;
 
 /// CLI arguments.
 #[derive(Debug, Parser)]
-#[command(name = "memory-mcp", version, about = "Persistent memory MCP server")]
+#[command(name = "palimpsest-mcp", version, about = "Persistent memory MCP server")]
 struct Cli {
-    /// Override the database path (default: ~/.memory-mcp/memory.db).
+    /// Override the database path (default: ~/.palimpsest-mcp/palimpsest.db).
     #[arg(long)]
     db_path: Option<PathBuf>,
 }
@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server = MemoryServer::new(db, embedder, extractor);
 
     let service = server.serve(rmcp::transport::stdio()).await?;
-    tracing::info!("memory-mcp serving over stdio");
+    tracing::info!("palimpsest-mcp serving over stdio");
     service.waiting().await?;
     Ok(())
 }

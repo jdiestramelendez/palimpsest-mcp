@@ -6,9 +6,9 @@ use std::sync::Arc;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 
-use memory_mcp::db::Db;
-use memory_mcp::providers::mock::{MockEmbedder, MockExtractor};
-use memory_mcp::tools::{GetProjectStateRequest, MemoryServer, SaveMemoryRequest};
+use palimpsest_mcp::db::Db;
+use palimpsest_mcp::providers::mock::{MockEmbedder, MockExtractor};
+use palimpsest_mcp::tools::{GetProjectStateRequest, MemoryServer, SaveMemoryRequest};
 
 const DIMS: usize = 16;
 

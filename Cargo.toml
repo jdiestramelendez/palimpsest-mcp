@@ -1,5 +1,5 @@
 [package]
-name = "memory-mcp"
+name = "palimpsest-mcp"
 version = "0.1.0"
 edition = "2021"
 description = "Persistent memory MCP server: hybrid semantic+lexical retrieval over SQLite with supersession-based history"

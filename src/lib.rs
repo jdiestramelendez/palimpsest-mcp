@@ -1,7 +1,7 @@
-//! memory-mcp library: persistent memory for coding agents over MCP.
+//! palimpsest-mcp library: persistent memory for coding agents over MCP.
 //!
 //! Modules:
-//! - [`config`]: `~/.memory-mcp/config.toml` loading with Ollama defaults.
+//! - [`config`]: `~/.palimpsest-mcp/config.toml` loading with Ollama defaults.
 //! - [`db`]: SQLite (WAL, sqlite-vec, FTS5) open/migrate + typed queries.
 //! - [`providers`]: `Embedder` / `Extractor` traits and implementations.
 //! - [`core`]: hybrid RRF retrieval and the end-of-session extraction pipeline.

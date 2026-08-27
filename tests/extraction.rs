@@ -6,14 +6,14 @@ use std::sync::Arc;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 
-use memory_mcp::providers::mock::{MockEmbedder, MockExtractor};
-use memory_mcp::tools::{EndSessionRequest, MemoryServer, SaveMemoryRequest};
+use palimpsest_mcp::providers::mock::{MockEmbedder, MockExtractor};
+use palimpsest_mcp::tools::{EndSessionRequest, MemoryServer, SaveMemoryRequest};
 
 const DIMS: usize = 16;
 const TRANSCRIPT: &str = include_str!("fixtures/transcript.txt");
 
 fn server_with(responses: Vec<&str>) -> MemoryServer {
-    let db = memory_mcp::db::Db::open_in_memory(DIMS).expect("db");
+    let db = palimpsest_mcp::db::Db::open_in_memory(DIMS).expect("db");
     MemoryServer::new(
         db,
         Arc::new(MockEmbedder::new(DIMS)),

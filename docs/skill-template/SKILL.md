@@ -5,7 +5,7 @@ description: Use the memory MCP server to stay continuous across sessions - load
 
 # Project memory
 
-This project uses the `memory-mcp` server. Follow this protocol in every
+This project uses the `palimpsest-mcp` server. Follow this protocol in every
 session:
 
 ## At session start

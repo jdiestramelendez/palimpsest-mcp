@@ -1,8 +1,8 @@
 //! Provider layer tests (Step 2). No network calls.
 
-use memory_mcp::config::{Config, EmbedderProvider, ExtractorProvider};
-use memory_mcp::providers::mock::MockEmbedder;
-use memory_mcp::providers::{from_config, Embedder};
+use palimpsest_mcp::config::{Config, EmbedderProvider, ExtractorProvider};
+use palimpsest_mcp::providers::mock::MockEmbedder;
+use palimpsest_mcp::providers::{from_config, Embedder};
 
 #[tokio::test]
 async fn factory_selects_ollama_by_default() {
@@ -62,9 +62,9 @@ async fn mock_embedder_is_deterministic_with_correct_dims() {
 }
 
 mod serde_roundtrips {
-    use memory_mcp::providers::anthropic::*;
-    use memory_mcp::providers::ollama::*;
-    use memory_mcp::providers::openai::*;
+    use palimpsest_mcp::providers::anthropic::*;
+    use palimpsest_mcp::providers::ollama::*;
+    use palimpsest_mcp::providers::openai::*;
 
     /// Serialize -> deserialize -> serialize must be stable.
     fn roundtrip<T: serde::Serialize + serde::de::DeserializeOwned>(value: &T) {

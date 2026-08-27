@@ -1,6 +1,9 @@
-# memory-mcp
+# palimpsest-mcp
 
-Persistent memory for coding agents, served over MCP. A single SQLite file
+Persistent memory for coding agents, served over MCP. A *palimpsest* is a
+manuscript written over an older text whose earlier layers remain visible
+underneath — which is exactly how this store treats facts: corrections
+layer on top, nothing underneath is ever erased. A single SQLite file
 stores project facts with full history (nothing is ever deleted — outdated
 facts are *superseded* and remain queryable via time-travel), retrieval is
 hybrid semantic + lexical (sqlite-vec KNN fused with FTS5 BM25 via
@@ -20,18 +23,18 @@ document that is rewritten at the end of each session.
 
 ```sh
 cargo build --release
-# binary at target/release/memory-mcp
+# binary at target/release/palimpsest-mcp
 ```
 
-Data lives in `~/.memory-mcp/` (`memory.db`, `config.toml`). Override the
+Data lives in `~/.palimpsest-mcp/` (`palimpsest.db`, `config.toml`). Override the
 database location with `--db-path /path/to.db`.
 
-## Configuration — `~/.memory-mcp/config.toml`
+## Configuration — `~/.palimpsest-mcp/config.toml`
 
 Everything is optional; the defaults use a local Ollama with no API keys.
 
 ```toml
-# db_path = "/custom/path/memory.db"   # optional; --db-path wins over this
+# db_path = "/custom/path/palimpsest.db"   # optional; --db-path wins over this
 
 [embedder]
 provider = "ollama"          # "ollama" | "openai"
@@ -59,7 +62,7 @@ verbose logging.
 **Claude Code**
 
 ```sh
-claude mcp add memory -- /absolute/path/to/target/release/memory-mcp
+claude mcp add palimpsest -- /absolute/path/to/target/release/palimpsest-mcp
 ```
 
 **Claude Desktop** — add to `claude_desktop_config.json`:
@@ -67,8 +70,8 @@ claude mcp add memory -- /absolute/path/to/target/release/memory-mcp
 ```json
 {
   "mcpServers": {
-    "memory": {
-      "command": "/absolute/path/to/target/release/memory-mcp"
+    "palimpsest": {
+      "command": "/absolute/path/to/target/release/palimpsest-mcp"
     }
   }
 }
@@ -79,8 +82,8 @@ claude mcp add memory -- /absolute/path/to/target/release/memory-mcp
 ```json
 {
   "mcpServers": {
-    "memory": {
-      "command": "/absolute/path/to/target/release/memory-mcp"
+    "palimpsest": {
+      "command": "/absolute/path/to/target/release/palimpsest-mcp"
     }
   }
 }

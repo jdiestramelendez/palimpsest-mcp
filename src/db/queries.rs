@@ -14,7 +14,7 @@ use crate::error::{Error, Result};
 /// A project row.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
-    /// Slug identifier, e.g. `memory-mcp`.
+    /// Slug identifier, e.g. `palimpsest-mcp`.
     pub id: String,
     /// Display name.
     pub name: String,

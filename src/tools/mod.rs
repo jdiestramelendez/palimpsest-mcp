@@ -27,7 +27,7 @@ use crate::providers::{Embedder, Extractor};
 
 /// Instructions surfaced to MCP clients at initialize time.
 const INSTRUCTIONS: &str = "\
-memory-mcp gives you persistent memory across sessions. Call get_project_state \
+palimpsest-mcp gives you persistent memory across sessions. Call get_project_state \
 with the project name at the START of every session to load its living state \
 document and counts. Use search_memory whenever you are missing context \
 (decisions, preferences, past facts). Use save_memory when the user asks you \
@@ -450,7 +450,7 @@ impl MemoryServer {
 impl ServerHandler for MemoryServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("memory-mcp", env!("CARGO_PKG_VERSION")))
+            .with_server_info(Implementation::new("palimpsest-mcp", env!("CARGO_PKG_VERSION")))
             .with_instructions(INSTRUCTIONS)
     }
 }

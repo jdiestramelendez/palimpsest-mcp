@@ -1,6 +1,6 @@
-//! Configuration loading for memory-mcp.
+//! Configuration loading for palimpsest-mcp.
 //!
-//! Configuration lives at `~/.memory-mcp/config.toml`. Every field has a
+//! Configuration lives at `~/.palimpsest-mcp/config.toml`. Every field has a
 //! default tuned for a local, keyless Ollama setup so the server works out
 //! of the box. API keys are never stored in the file — the config names an
 //! environment variable and the key is read from the process environment.
@@ -94,19 +94,19 @@ pub struct Config {
     pub embedder: EmbedderConfig,
     /// Extraction backend configuration.
     pub extractor: ExtractorConfig,
-    /// Database path override; defaults to `~/.memory-mcp/memory.db`.
+    /// Database path override; defaults to `~/.palimpsest-mcp/palimpsest.db`.
     pub db_path: Option<PathBuf>,
 }
 
 impl Config {
-    /// Directory holding config and the default database: `~/.memory-mcp`.
+    /// Directory holding config and the default database: `~/.palimpsest-mcp`.
     pub fn data_dir() -> PathBuf {
         dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join(".memory-mcp")
+            .join(".palimpsest-mcp")
     }
 
-    /// Load config from `~/.memory-mcp/config.toml`, falling back to
+    /// Load config from `~/.palimpsest-mcp/config.toml`, falling back to
     /// defaults when the file does not exist.
     pub fn load() -> Result<Self> {
         Self::load_from(&Self::data_dir().join("config.toml"))
@@ -129,7 +129,7 @@ impl Config {
         if let Some(p) = &self.db_path {
             return p.clone();
         }
-        Self::data_dir().join("memory.db")
+        Self::data_dir().join("palimpsest.db")
     }
 
     /// Read the API key for the given provider config from the environment.

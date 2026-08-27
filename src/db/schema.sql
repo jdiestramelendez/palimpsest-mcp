@@ -1,4 +1,4 @@
--- memory-mcp schema. {DIMS} is substituted with the configured embedding
+-- palimpsest-mcp schema. {DIMS} is substituted with the configured embedding
 -- dimensionality at first creation; the value is then pinned in `meta`.
 --
 -- Invariants encoded here (never violate):
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS meta (
 ) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS projects (
-    id               TEXT PRIMARY KEY,          -- slug, e.g. "memory-mcp"
+    id               TEXT PRIMARY KEY,          -- slug, e.g. "palimpsest-mcp"
     name             TEXT NOT NULL,
     aliases          TEXT NOT NULL DEFAULT '[]',-- JSON array of strings
     state_md         TEXT NOT NULL DEFAULT '',

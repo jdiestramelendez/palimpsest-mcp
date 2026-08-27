@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-/// Unified error type for memory-mcp.
+/// Unified error type for palimpsest-mcp.
 #[derive(Debug, Error)]
 pub enum Error {
     /// Underlying SQLite failure.

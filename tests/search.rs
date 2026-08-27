@@ -6,8 +6,8 @@ use std::sync::Arc;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 
-use memory_mcp::providers::mock::{MockEmbedder, MockExtractor};
-use memory_mcp::tools::{MemoryServer, SaveMemoryRequest, SearchMemoryRequest};
+use palimpsest_mcp::providers::mock::{MockEmbedder, MockExtractor};
+use palimpsest_mcp::tools::{MemoryServer, SaveMemoryRequest, SearchMemoryRequest};
 
 const DIMS: usize = 8;
 
@@ -20,7 +20,7 @@ fn axis(axis: usize) -> Vec<f32> {
 
 /// Server + a handle to the embedder for pinning vectors.
 fn server() -> (MemoryServer, Arc<MockEmbedder>) {
-    let db = memory_mcp::db::Db::open_in_memory(DIMS).expect("db");
+    let db = palimpsest_mcp::db::Db::open_in_memory(DIMS).expect("db");
     let embedder = Arc::new(MockEmbedder::new(DIMS));
     let server = MemoryServer::new(db, embedder.clone(), Arc::new(MockExtractor::failing()));
     (server, embedder)
