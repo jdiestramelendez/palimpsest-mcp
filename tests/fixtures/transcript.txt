@@ -1,0 +1,10 @@
+[user] Let's finally sort out the database layer for acme-shop.
+[assistant] Sure. Right now the prototype stores orders in a JSON file. What direction do you want?
+[user] We decided last month to use Postgres, but hosting is too expensive for this stage. Let's switch to SQLite with litestream backups.
+[assistant] Understood: SQLite as the primary store, litestream replicating to S3. I'll add the rusqlite dependency and a migrations folder.
+[user] Yes. Also, a convention: every migration file starts with a UTC timestamp prefix.
+[assistant] Done. I created migrations/20260827T0900_init.sql and wired a migrate-on-boot step.
+[user] One more thing — I always want cargo clippy to pass with -D warnings before any commit in any of my projects.
+[assistant] Noted, I ran clippy and fixed the two warnings it flagged.
+[user] There's still the flaky checkout test, we should look at it next time.
+[assistant] Agreed, I've left a TODO. Summary: swapped storage from the JSON prototype to SQLite + litestream, added the migration convention, clippy is clean, checkout test flakiness remains open.

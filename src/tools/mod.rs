@@ -18,6 +18,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use crate::core::extraction;
 use crate::core::retrieval::{self, SearchParams};
 use crate::db::queries::{self, NewMemory, MEMORY_KINDS};
 use crate::db::Db;
@@ -39,7 +40,6 @@ extracted and the project state is updated.";
 pub struct MemoryServer {
     db: Arc<Mutex<Db>>,
     embedder: Arc<dyn Embedder>,
-    #[allow(dead_code)] // wired into end_session in Step 5
     extractor: Arc<dyn Extractor>,
     tool_router: ToolRouter<Self>,
 }
@@ -94,6 +94,20 @@ pub struct SearchMemoryRequest {
     pub as_of: Option<String>,
 }
 
+/// Parameters for `end_session`.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct EndSessionRequest {
+    /// Project name, id, or alias this session was about. Omit for
+    /// project-less sessions (facts are stored as global).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    /// The session transcript (or a faithful condensed version of it).
+    pub transcript: String,
+    /// Client that ran the session, e.g. "claude-code" or "cursor".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<String>,
+}
+
 /// Build a tool-level error result with an agent-actionable message.
 fn tool_error(msg: impl Into<String>) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(msg.into())])
@@ -117,6 +131,21 @@ impl MemoryServer {
     pub fn new(db: Db, embedder: Arc<dyn Embedder>, extractor: Arc<dyn Extractor>) -> Self {
         Self {
             db: Arc::new(Mutex::new(db)),
+            embedder,
+            extractor,
+            tool_router: Self::tool_router(),
+        }
+    }
+
+    /// Create a server sharing an existing database handle (tests use this
+    /// to swap providers mid-scenario).
+    pub fn from_shared(
+        db: Arc<Mutex<Db>>,
+        embedder: Arc<dyn Embedder>,
+        extractor: Arc<dyn Extractor>,
+    ) -> Self {
+        Self {
+            db,
             embedder,
             extractor,
             tool_router: Self::tool_router(),
@@ -346,6 +375,65 @@ impl MemoryServer {
                 })))
             }
             Err(e) => map_err(e),
+        }
+    }
+
+    /// Persist the session and distill it into durable memories + STATE.md.
+    #[tool(
+        name = "end_session",
+        description = "Close a session: saves the transcript, extracts durable facts (deduplicated and conflict-resolved against existing memories), and rewrites the project's state document. Call this once when a session wraps up."
+    )]
+    pub async fn end_session(
+        &self,
+        params: Parameters<EndSessionRequest>,
+    ) -> std::result::Result<CallToolResult, ErrorData> {
+        let req = params.0;
+        if req.transcript.trim().is_empty() {
+            return Ok(tool_error(
+                "transcript is empty. Pass the session conversation (or a faithful summary of it).",
+            ));
+        }
+
+        let mut db = self.db.lock().await;
+
+        let project_id = match &req.project {
+            Some(name) => match queries::ensure_project(db.conn(), name) {
+                Ok(p) => Some(p.id),
+                Err(e) => return map_err(e),
+            },
+            None => None,
+        };
+
+        // Persist the transcript FIRST: whatever the extractor does, the
+        // session must survive.
+        let session_id = match queries::insert_session(
+            db.conn(),
+            project_id.as_deref(),
+            req.client.as_deref(),
+            &req.transcript,
+        ) {
+            Ok(id) => id,
+            Err(e) => return map_err(e),
+        };
+
+        match extraction::run_pipeline(
+            &mut db,
+            self.embedder.as_ref(),
+            self.extractor.as_ref(),
+            session_id,
+            project_id.as_deref(),
+            &req.transcript,
+        )
+        .await
+        {
+            Ok(result) => Ok(CallToolResult::structured(
+                serde_json::to_value(&result).unwrap_or_default(),
+            )),
+            Err(e) => Ok(tool_error(format!(
+                "session transcript was saved as session {session_id}, but fact extraction \
+                 failed: {e}. Nothing was lost — call end_session again later with the same \
+                 transcript to retry extraction (the saved copy stays for audit)."
+            ))),
         }
     }
 }
