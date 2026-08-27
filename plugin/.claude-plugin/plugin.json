@@ -1,0 +1,7 @@
+{
+  "name": "palimpsest",
+  "description": "Persistent project memory: injects the project's living state at session start and distills durable facts automatically at session end.",
+  "version": "0.1.0",
+  "author": { "name": "Jorge Diestra" },
+  "repository": "https://github.com/jdiestramelendez/palimpsest-mcp"
+}

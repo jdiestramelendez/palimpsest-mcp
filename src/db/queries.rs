@@ -271,18 +271,31 @@ pub fn insert_memory(
     Ok(new_id)
 }
 
-/// Persist a session transcript. Returns the session id.
+/// Persist a session transcript (with its dedup hash). Returns the session id.
 pub fn insert_session(
     conn: &Connection,
     project_id: Option<&str>,
     client: Option<&str>,
     transcript: &str,
+    transcript_hash: &str,
 ) -> Result<i64> {
     conn.execute(
-        "INSERT INTO sessions (project_id, client, transcript) VALUES (?1, ?2, ?3)",
-        params![project_id, client, transcript],
+        "INSERT INTO sessions (project_id, client, transcript, transcript_hash)
+         VALUES (?1, ?2, ?3, ?4)",
+        params![project_id, client, transcript, transcript_hash],
     )?;
     Ok(conn.last_insert_rowid())
+}
+
+/// Find a previously ingested session by transcript hash (idempotency guard).
+pub fn find_session_by_hash(conn: &Connection, transcript_hash: &str) -> Result<Option<i64>> {
+    conn.query_row(
+        "SELECT id FROM sessions WHERE transcript_hash = ?1 LIMIT 1",
+        [transcript_hash],
+        |r| r.get(0),
+    )
+    .optional()
+    .map_err(Error::from)
 }
 
 /// Store the session's one-line summary once extraction produced it.

@@ -1,6 +1,6 @@
 # 001 · [A] Claude Code plugin with lifecycle hooks
 
-**Priority:** A · **Status:** pending
+**Priority:** A · **Status:** done
 
 ## Context
 Today the server depends on the agent *choosing* to call the tools.
@@ -31,11 +31,15 @@ palimpsest-mcp into the session lifecycle:
   transcript content hash in `sessions` and skip if already ingested.
 
 ## Acceptance criteria
-- [ ] `palimpsest-mcp ingest` runs the full pipeline from a transcript file.
-- [ ] Duplicate ingest of the same transcript is a no-op (hash check).
-- [ ] Fresh Claude Code session in a repo shows injected state without any
-      manual tool call.
-- [ ] Closing a session creates memories automatically.
+- [x] `palimpsest-mcp ingest` runs the full pipeline from a transcript file.
+- [x] Duplicate ingest of the same transcript is a no-op (hash check).
+- [x] Fresh Claude Code session in a repo shows injected state without any
+      manual tool call. (Verified: `hook session-start` prints state for a
+      seeded project, silent for unknown ones; needs a live run on a real
+      machine for the final in-client check.)
+- [x] Closing a session creates memories automatically. (`hook session-end`
+      parses the session JSONL, ingests idempotently; extraction failure
+      still persists the transcript.)
 
 ## Out of scope
 Cursor/other-client automation; UserPromptSubmit/PostToolUse observation

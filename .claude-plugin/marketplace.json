@@ -1,0 +1,11 @@
+{
+  "name": "palimpsest-mcp",
+  "owner": { "name": "Jorge Diestra" },
+  "plugins": [
+    {
+      "name": "palimpsest",
+      "source": "./plugin",
+      "description": "Persistent project memory: auto-injects project state at session start, auto-extracts durable facts at session end."
+    }
+  ]
+}

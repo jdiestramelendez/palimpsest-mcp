@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          { "type": "command", "command": "palimpsest-mcp hook session-start" }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          { "type": "command", "command": "palimpsest-mcp hook session-end" }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          { "type": "command", "command": "palimpsest-mcp hook session-end" }
+        ]
+      }
+    ]
+  }
+}

@@ -22,15 +22,17 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
-    id         INTEGER PRIMARY KEY,
-    project_id TEXT REFERENCES projects(id),
-    client     TEXT,                            -- e.g. "claude-code", "cursor"
-    transcript TEXT NOT NULL,
-    summary    TEXT,
-    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    id              INTEGER PRIMARY KEY,
+    project_id      TEXT REFERENCES projects(id),
+    client          TEXT,                       -- e.g. "claude-code", "cursor"
+    transcript      TEXT NOT NULL,
+    transcript_hash TEXT,                       -- sha256 hex; ingest dedup key
+    summary         TEXT,
+    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_hash ON sessions(transcript_hash);
 
 CREATE TABLE IF NOT EXISTS memories (
     id                INTEGER PRIMARY KEY,

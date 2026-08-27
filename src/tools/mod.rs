@@ -18,7 +18,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-use crate::core::extraction;
+use crate::core::ingest::{self, IngestOutcome};
 use crate::core::retrieval::{self, SearchParams};
 use crate::db::queries::{self, NewMemory, MEMORY_KINDS};
 use crate::db::Db;
@@ -412,36 +412,35 @@ impl MemoryServer {
             None => None,
         };
 
-        // Persist the transcript FIRST: whatever the extractor does, the
-        // session must survive.
-        let session_id = match queries::insert_session(
-            db.conn(),
-            project_id.as_deref(),
-            req.client.as_deref(),
-            &req.transcript,
-        ) {
-            Ok(id) => id,
-            Err(e) => return map_err(e),
-        };
-
-        match extraction::run_pipeline(
+        // Shared ingest path: persists the transcript first and dedups by
+        // content hash, so a hook or retry re-sending the same transcript
+        // is a no-op.
+        match ingest::ingest_transcript(
             &mut db,
             self.embedder.as_ref(),
             self.extractor.as_ref(),
-            session_id,
             project_id.as_deref(),
+            req.client.as_deref(),
             &req.transcript,
         )
         .await
         {
-            Ok(result) => Ok(CallToolResult::structured(
+            Ok(IngestOutcome::Completed(result)) => Ok(CallToolResult::structured(
                 serde_json::to_value(&result).unwrap_or_default(),
             )),
-            Err(e) => Ok(tool_error(format!(
+            Ok(IngestOutcome::AlreadyIngested { session_id }) => {
+                Ok(CallToolResult::structured(serde_json::json!({
+                    "session_id": session_id,
+                    "already_ingested": true,
+                    "memories_created": 0,
+                })))
+            }
+            Ok(IngestOutcome::ExtractionFailed { session_id, error }) => Ok(tool_error(format!(
                 "session transcript was saved as session {session_id}, but fact extraction \
-                 failed: {e}. Nothing was lost — call end_session again later with the same \
-                 transcript to retry extraction (the saved copy stays for audit)."
+                 failed: {error}. Nothing was lost — call end_session again later with the \
+                 same transcript to retry extraction."
             ))),
+            Err(e) => map_err(e),
         }
     }
 }

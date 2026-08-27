@@ -18,7 +18,7 @@ use crate::error::{Error, Result};
 const SCHEMA_TEMPLATE: &str = include_str!("schema.sql");
 
 /// Schema version recorded in `meta` (bump on migration-worthy changes).
-const SCHEMA_VERSION: &str = "1";
+const SCHEMA_VERSION: &str = "2";
 
 static VEC_INIT: Once = Once::new();
 
@@ -101,6 +101,7 @@ impl Db {
                     db_dims,
                 });
             }
+            Self::migrate(&conn)?;
         } else {
             let schema = SCHEMA_TEMPLATE.replace("{DIMS}", &dims.to_string());
             conn.execute_batch(&schema)?;
@@ -111,6 +112,30 @@ impl Db {
         }
 
         Ok(Self { conn, dims })
+    }
+
+    /// Bring an existing database up to the current schema version. Each
+    /// step is idempotent and bumps `meta.schema_version`.
+    fn migrate(conn: &Connection) -> Result<()> {
+        let version: i64 = conn
+            .query_row("SELECT value FROM meta WHERE key = 'schema_version'", [], |r| {
+                r.get::<_, String>(0)
+            })
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1);
+        if version < 2 {
+            conn.execute_batch(
+                "ALTER TABLE sessions ADD COLUMN transcript_hash TEXT;
+                 CREATE INDEX IF NOT EXISTS idx_sessions_hash ON sessions(transcript_hash);",
+            )?;
+            conn.execute(
+                "INSERT INTO meta (key, value) VALUES ('schema_version', '2')
+                 ON CONFLICT(key) DO UPDATE SET value = '2'",
+                [],
+            )?;
+        }
+        Ok(())
     }
 
     /// The embedding dimensionality this database was created with.

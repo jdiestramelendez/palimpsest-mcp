@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "palimpsest": {
+      "command": "palimpsest-mcp"
+    }
+  }
+}

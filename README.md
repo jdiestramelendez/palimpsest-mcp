@@ -59,10 +59,22 @@ verbose logging.
 
 ## Register the server
 
-**Claude Code**
+**Claude Code — plugin (recommended)**
+
+The plugin wires everything automatically: project state is injected at
+session start and durable facts are extracted at session end, no manual
+tool calls needed.
 
 ```sh
-claude mcp add palimpsest -- /absolute/path/to/target/release/palimpsest-mcp
+cargo install --path .        # puts palimpsest-mcp on your PATH
+claude plugin marketplace add jdiestramelendez/palimpsest-mcp
+claude plugin install palimpsest@palimpsest-mcp
+```
+
+**Claude Code — MCP server only**
+
+```sh
+claude mcp add --scope user palimpsest -- /absolute/path/to/target/release/palimpsest-mcp
 ```
 
 **Claude Desktop** — add to `claude_desktop_config.json`:
@@ -107,6 +119,19 @@ claude mcp add palimpsest -- /absolute/path/to/target/release/palimpsest-mcp
 To make agents do this reliably, drop the skill template from
 `docs/skill-template/SKILL.md` into your project (e.g.
 `.claude/skills/memory/SKILL.md`).
+
+## CLI
+
+```sh
+palimpsest-mcp                                   # serve MCP over stdio (default)
+palimpsest-mcp ingest --transcript notes.txt \
+    --project my-app [--format claude-jsonl]     # manual ingestion (idempotent)
+palimpsest-mcp hook session-start                # Claude Code hook entry points
+palimpsest-mcp hook session-end                  #   (hook JSON on stdin)
+```
+
+Ingestion is idempotent: the same transcript content (sha256) is never
+processed twice, so lifecycle hooks firing repeatedly are no-ops.
 
 ## Guarantees
 
