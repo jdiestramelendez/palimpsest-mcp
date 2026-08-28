@@ -1,6 +1,6 @@
 {
   "name": "palimpsest-mcp",
-  "owner": { "name": "Jorge Diestra" },
+  "owner": { "name": "jdiestramelendez" },
   "plugins": [
     {
       "name": "palimpsest",

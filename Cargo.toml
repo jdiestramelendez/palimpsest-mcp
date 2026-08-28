@@ -2,8 +2,15 @@
 name = "palimpsest-mcp"
 version = "0.1.0"
 edition = "2021"
-description = "Persistent memory MCP server: hybrid semantic+lexical retrieval over SQLite with supersession-based history"
+rust-version = "1.85"
+description = "Persistent memory MCP server: hybrid semantic+lexical+entity retrieval over SQLite, append-only supersession history with time-travel, knowledge graph, and a living STATE.md per project"
 license = "MIT"
+readme = "README.md"
+repository = "https://github.com/jdiestramelendez/palimpsest-mcp"
+homepage = "https://github.com/jdiestramelendez/palimpsest-mcp"
+keywords = ["mcp", "memory", "ai", "agent", "sqlite"]
+categories = ["command-line-utilities", "database"]
+exclude = ["tickets/", "evals/", ".github/", "plugin/", ".claude-plugin/", "docs/", "examples/", "tests/"]
 
 [dependencies]
 rmcp = { version = "3.1", features = ["server", "transport-io", "transport-streamable-http-server", "macros", "schemars"] }

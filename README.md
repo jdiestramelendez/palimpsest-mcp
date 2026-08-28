@@ -23,6 +23,22 @@ document that is rewritten at the end of each session.
 
 ## Install
 
+From crates.io (once published):
+
+```sh
+cargo install palimpsest-mcp
+```
+
+Homebrew (macOS/Linux, once the tap is live):
+
+```sh
+brew install jdiestramelendez/tap/palimpsest-mcp
+```
+
+Prebuilt binaries for Linux (x86_64/arm64), macOS (x86_64/arm64) and
+Windows are attached to [GitHub Releases](https://github.com/jdiestramelendez/palimpsest-mcp/releases)
+with SHA-256 checksums. From source:
+
 ```sh
 cargo build --release
 # binary at target/release/palimpsest-mcp

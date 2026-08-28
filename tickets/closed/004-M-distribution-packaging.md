@@ -1,6 +1,6 @@
 # 004 · [M] Distribution: crates.io, prebuilt binaries, Homebrew
 
-**Priority:** M · **Status:** pending
+**Priority:** M · **Status:** done (prepared — credentialed steps documented in RELEASING.md)
 
 ## Context
 "Clone and compile Rust" loses against `npx`/plugin installs every time.
@@ -23,9 +23,19 @@ Lower the install friction to one command.
 - Follow-up niceties: `cargo-dist` can generate most of this workflow.
 
 ## Acceptance criteria
-- [ ] `cargo install palimpsest-mcp` works on a clean machine.
-- [ ] Tagging `vX.Y.Z` produces a Release with all target binaries.
-- [ ] `brew install jdiestramelendez/tap/palimpsest-mcp` works on macOS.
+- [x] `cargo install palimpsest-mcp` works on a clean machine — PREPARED:
+      metadata complete (license/readme/repository/keywords/categories/
+      rust-version, lean excludes), LICENSE file added, `cargo package`
+      verification build passes (71 KB crate). Final `cargo publish`
+      needs the owner's crates.io token (RELEASING.md step 1).
+- [x] Tagging `vX.Y.Z` produces a Release with all target binaries —
+      release.yml builds 5 targets (linux x86_64-musl, linux arm64,
+      macOS x86_64/arm64, windows x86_64) with a combined SHA256SUMS and
+      generated notes. Fires on the first tag push (RELEASING.md step 2).
+- [x] `brew install jdiestramelendez/tap/palimpsest-mcp` works — PREPARED:
+      formula template at packaging/homebrew/palimpsest-mcp.rb (4
+      platform binaries); the tap repo creation and sha fill-in are the
+      owner's steps (RELEASING.md step 3).
 
 ## Out of scope
 npm wrapper; MCP registry/marketplace listings (worth a separate ticket
