@@ -8,7 +8,7 @@
 use serde::Deserialize;
 
 use crate::core::retrieval::{self, SearchParams};
-use crate::db::queries::{self, NewMemory, MEMORY_KINDS};
+use crate::db::queries::{self, EntityRef, GraphPayload, NewMemory, TripleRef, MEMORY_KINDS};
 use crate::db::Db;
 use crate::error::{Error, Result};
 use crate::providers::{Embedder, Extractor};
@@ -30,7 +30,13 @@ Return ONLY a JSON object, no prose, with this exact shape:
       "content": "one self-contained factual sentence",
       "kind": "fact | decision | preference | todo | insight",
       "importance": 1-5,
-      "scope": "project | global"
+      "scope": "project | global",
+      "entities": [
+        {"name": "PostgreSQL", "kind": "technology | person | project | concept | other"}
+      ],
+      "triples": [
+        {"source": "acme-shop", "predicate": "uses", "target": "PostgreSQL"}
+      ]
     }
   ]
 }
@@ -45,7 +51,11 @@ Rules:
 - scope is "global" only for facts about the user or their machine that
   hold across every project; otherwise "project".
 - At most 15 facts. Fewer, well-chosen facts beat many noisy ones.
-- importance 5 = losing this fact breaks future work; 1 = nice to know."#;
+- importance 5 = losing this fact breaks future work; 1 = nice to know.
+- entities: the concrete things the fact is about (tools, services, people,
+  projects, key concepts). 0-4 per fact; omit generic words.
+- triples: only relations the fact directly states, with source/target
+  drawn from (or added to) that fact's entities. 0-2 per fact."#;
 
 /// System prompt for conflict classification.
 pub const CONFLICT_PROMPT: &str = r#"You compare one NEW fact against a numbered list of EXISTING memories.
@@ -91,6 +101,33 @@ pub struct ExtractedFact {
     /// `project` or `global`.
     #[serde(default)]
     pub scope: Option<String>,
+    /// Entities this fact mentions.
+    #[serde(default)]
+    pub entities: Vec<ExtractedEntity>,
+    /// Relations this fact states.
+    #[serde(default)]
+    pub triples: Vec<ExtractedTriple>,
+}
+
+/// An entity as returned by the extraction model.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExtractedEntity {
+    /// Display name.
+    pub name: String,
+    /// Entity kind; sanitized against `ENTITY_KINDS` at insert.
+    #[serde(default)]
+    pub kind: Option<String>,
+}
+
+/// A relation triple as returned by the extraction model.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExtractedTriple {
+    /// Source entity name.
+    pub source: String,
+    /// Relation label.
+    pub predicate: String,
+    /// Target entity name.
+    pub target: String,
 }
 
 /// Parsed output of the extraction call.
@@ -252,6 +289,25 @@ pub async fn run_pipeline(
             importance,
             source_session_id: Some(session_id),
         };
+        let graph = GraphPayload {
+            entities: fact
+                .entities
+                .iter()
+                .map(|e| EntityRef {
+                    name: e.name.clone(),
+                    kind: e.kind.clone().unwrap_or_else(|| "other".into()),
+                })
+                .collect(),
+            triples: fact
+                .triples
+                .iter()
+                .map(|t| TripleRef {
+                    source: t.source.clone(),
+                    predicate: t.predicate.clone(),
+                    target: t.target.clone(),
+                })
+                .collect(),
+        };
         match verdict.verdict.as_str() {
             "duplicate" => {
                 result.duplicates_skipped += 1;
@@ -263,19 +319,19 @@ pub async fn run_pipeline(
                     .filter(|id| candidates.iter().any(|c| c.memory.id == *id));
                 match target {
                     Some(old_id) => {
-                        queries::insert_memory(db.conn_mut(), &new, &embedding, Some(old_id))?;
+                        queries::insert_memory(db.conn_mut(), &new, &embedding, Some(old_id), Some(&graph))?;
                         result.memories_created += 1;
                         result.memories_superseded += 1;
                     }
                     None => {
                         tracing::warn!("supersedes verdict named an unknown id; inserting as new");
-                        queries::insert_memory(db.conn_mut(), &new, &embedding, None)?;
+                        queries::insert_memory(db.conn_mut(), &new, &embedding, None, Some(&graph))?;
                         result.memories_created += 1;
                     }
                 }
             }
             _ => {
-                queries::insert_memory(db.conn_mut(), &new, &embedding, None)?;
+                queries::insert_memory(db.conn_mut(), &new, &embedding, None, Some(&graph))?;
                 result.memories_created += 1;
             }
         }

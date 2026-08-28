@@ -114,7 +114,7 @@ fn project_derives_from_git_root_or_dirname() {
 }
 
 #[test]
-fn v1_database_is_migrated_to_v2_on_open() {
+fn v1_database_is_migrated_to_current_on_open() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("old.db");
     // Create a fresh DB, then rewind it to schema v1 (drop the hash column
@@ -143,5 +143,15 @@ fn v1_database_is_migrated_to_v2_on_open() {
         .conn()
         .query_row("SELECT value FROM meta WHERE key = 'schema_version'", [], |r| r.get(0))
         .expect("version");
-    assert_eq!(version, "2");
+    assert_eq!(version, "3");
+    let graph_tables: i64 = db
+        .conn()
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table'
+             AND name IN ('entities','memory_entities','relations')",
+            [],
+            |r| r.get(0),
+        )
+        .expect("graph tables");
+    assert_eq!(graph_tables, 3, "v3 migration must create the graph tables");
 }

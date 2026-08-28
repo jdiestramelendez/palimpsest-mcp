@@ -108,6 +108,20 @@ pub struct EndSessionRequest {
     pub client: Option<String>,
 }
 
+/// Parameters for `get_related`.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct GetRelatedRequest {
+    /// Entity name to explore, e.g. "PostgreSQL" or "deploy pipeline".
+    pub entity: String,
+    /// Neighborhood radius: 1 (direct relations) or 2. Default 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hops: Option<i64>,
+    /// Project name, id, or alias to scope the lookup (global entities are
+    /// always visible). Omit to search across all projects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+}
+
 /// Build a tool-level error result with an agent-actionable message.
 fn tool_error(msg: impl Into<String>) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(msg.into())])
@@ -279,7 +293,7 @@ impl MemoryServer {
             importance,
             source_session_id: None,
         };
-        match queries::insert_memory(db.conn_mut(), &new, &embedding, req.supersedes) {
+        match queries::insert_memory(db.conn_mut(), &new, &embedding, req.supersedes, None) {
             Ok(memory_id) => Ok(CallToolResult::structured(serde_json::json!({
                 "memory_id": memory_id,
                 "project_id": project_id,
@@ -440,6 +454,61 @@ impl MemoryServer {
                  failed: {error}. Nothing was lost — call end_session again later with the \
                  same transcript to retry extraction."
             ))),
+            Err(e) => map_err(e),
+        }
+    }
+
+    /// Explore the knowledge graph around one entity.
+    #[tool(
+        name = "get_related",
+        description = "Explore the knowledge graph around an entity: returns the entities related to it (1 or 2 hops), the relations connecting them, and the memories that evidence each relation. Only currently-valid knowledge is returned (superseded facts drop out automatically)."
+    )]
+    pub async fn get_related(
+        &self,
+        params: Parameters<GetRelatedRequest>,
+    ) -> std::result::Result<CallToolResult, ErrorData> {
+        let req = params.0;
+        tracing::info!(entity = %req.entity, "get_related");
+        let hops = req.hops.unwrap_or(1);
+        if !(1..=2).contains(&hops) {
+            return Ok(tool_error("hops must be 1 or 2."));
+        }
+
+        let db = self.db.lock().await;
+        let conn = db.conn();
+
+        let project_id = match &req.project {
+            Some(name) => match queries::resolve_project(conn, name) {
+                Ok(Some(p)) => Some(p.id),
+                Ok(None) => {
+                    return Ok(tool_error(format!(
+                        "project '{name}' not found. Omit `project` to search everywhere."
+                    )))
+                }
+                Err(e) => return map_err(e),
+            },
+            None => None,
+        };
+
+        let entity = match queries::resolve_entity(conn, &req.entity, project_id.as_deref()) {
+            Ok(Some(e)) => e,
+            Ok(None) => {
+                return Ok(tool_error(format!(
+                    "no entity matches '{}'. Entities are created when sessions are ingested; \
+                     try search_memory for free-text lookup instead.",
+                    req.entity
+                )))
+            }
+            Err(e) => return map_err(e),
+        };
+
+        let (entity_id, name, kind) = entity;
+        match queries::entity_neighborhood(conn, entity_id, hops) {
+            Ok((nodes, edges)) => Ok(CallToolResult::structured(serde_json::json!({
+                "entity": { "id": entity_id, "name": name, "kind": kind },
+                "nodes": nodes,
+                "edges": edges,
+            }))),
             Err(e) => map_err(e),
         }
     }

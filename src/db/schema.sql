@@ -86,3 +86,42 @@ CREATE TRIGGER IF NOT EXISTS memories_fts_au AFTER UPDATE OF content ON memories
     VALUES ('delete', old.id, old.content);
     INSERT INTO memories_fts(rowid, content) VALUES (new.id, new.content);
 END;
+
+-- ── Entity graph (schema v3) ─────────────────────────────────────────────
+-- Entities are upserted by (norm_name, scope); edges carry the memory that
+-- evidences them, so superseding a memory expires its edges automatically
+-- (current-time graph reads filter on the evidence memory's validity).
+
+CREATE TABLE IF NOT EXISTS entities (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL,                  -- display form, first seen
+    norm_name  TEXT NOT NULL,                  -- lowercased/normalized match key
+    kind       TEXT NOT NULL DEFAULT 'other'
+               CHECK (kind IN ('technology','person','project','concept','other')),
+    project_id TEXT REFERENCES projects(id),   -- NULL = global scope
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_entities_norm
+    ON entities(norm_name, ifnull(project_id, ''));
+
+CREATE TABLE IF NOT EXISTS memory_entities (
+    memory_id INTEGER NOT NULL REFERENCES memories(id),
+    entity_id INTEGER NOT NULL REFERENCES entities(id),
+    PRIMARY KEY (memory_id, entity_id)
+) WITHOUT ROWID;
+
+CREATE INDEX IF NOT EXISTS idx_memory_entities_entity
+    ON memory_entities(entity_id);
+
+CREATE TABLE IF NOT EXISTS relations (
+    id                 INTEGER PRIMARY KEY,
+    source_entity_id   INTEGER NOT NULL REFERENCES entities(id),
+    predicate          TEXT NOT NULL,
+    target_entity_id   INTEGER NOT NULL REFERENCES entities(id),
+    evidence_memory_id INTEGER NOT NULL REFERENCES memories(id),
+    created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_relations_source ON relations(source_entity_id);
+CREATE INDEX IF NOT EXISTS idx_relations_target ON relations(target_entity_id);

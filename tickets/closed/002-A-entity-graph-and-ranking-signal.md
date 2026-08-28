@@ -1,6 +1,6 @@
 # 002 · [A] Entity graph: extraction, storage, and third ranking signal
 
-**Priority:** A · **Status:** pending
+**Priority:** A · **Status:** done
 
 ## Context
 Mem0's v3 algorithm fuses semantic + BM25 + entity matching. We already
@@ -37,11 +37,11 @@ knowledge-graph features (ticket 006, `get_related`).
   (same pattern as the FTS-less case today).
 
 ## Acceptance criteria
-- [ ] Facts ingested via end_session produce entities and relations.
-- [ ] Superseding a memory removes its edges from current-time graph reads.
-- [ ] A query naming an entity ranks entity-linked memories above
+- [x] Facts ingested via end_session produce entities and relations.
+- [x] Superseding a memory removes its edges from current-time graph reads.
+- [x] A query naming an entity ranks entity-linked memories above
       vector/lexical-only matches (test with pinned mock vectors).
-- [ ] `get_related` returns 1-hop and 2-hop neighborhoods with evidence.
+- [x] `get_related` returns 1-hop and 2-hop neighborhoods with evidence.
 
 ## Out of scope
 Graph visualization/export (ticket 006); entity dedup via embeddings.

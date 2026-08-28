@@ -9,7 +9,7 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use rusqlite::types::Value;
 use rusqlite::Connection;
 
-use crate::db::queries::{embedding_to_blob, Memory};
+use crate::db::queries::{embedding_to_blob, normalize_entity, Memory};
 use crate::error::{Error, Result};
 
 /// RRF constant: score contribution is 1 / (K + rank).
@@ -125,6 +125,12 @@ pub fn search(
 
     let fts_query = fts_query_from(query_text);
 
+    // Entity leg: entities whose normalized name appears inside the
+    // normalized query text (substring match handles multi-word names,
+    // LLM-free on the search path). Length guard avoids 1-2 char noise.
+    let norm_query = normalize_entity(query_text);
+    let use_entities = norm_query.len() >= 3;
+
     // The two ranked candidate lists. The vector leg over-fetches because
     // vec0 KNN cannot pre-filter by validity/scope; survivors are re-ranked.
     let vec_cte = format!(
@@ -150,33 +156,56 @@ pub fn search(
         )"
     );
 
-    // RRF fusion; when the lexical leg is absent, RRF runs over the single
-    // vector list.
-    let sql = if fts_query.is_some() {
-        format!(
-            "WITH {vec_cte}, {fts_cte},
-             fused AS (SELECT memory_id FROM vec_ranked
-                       UNION SELECT memory_id FROM fts_ranked)
-             SELECT m.*,
-                    COALESCE(1.0 / ({RRF_K} + v.rnk), 0)
-                  + COALESCE(1.0 / ({RRF_K} + f.rnk), 0) AS score
-             FROM fused c
-             JOIN memories m ON m.id = c.memory_id
-             LEFT JOIN vec_ranked v ON v.memory_id = c.memory_id
-             LEFT JOIN fts_ranked f ON f.memory_id = c.memory_id
-             ORDER BY score DESC, m.importance DESC, m.id DESC
-             LIMIT :limit"
-        )
-    } else {
-        format!(
-            "WITH {vec_cte}
-             SELECT m.*, 1.0 / ({RRF_K} + v.rnk) AS score
-             FROM vec_ranked v
-             JOIN memories m ON m.id = v.memory_id
-             ORDER BY score DESC, m.importance DESC, m.id DESC
-             LIMIT :limit"
-        )
-    };
+    // Entity candidates ranked by how many query entities each memory
+    // shares (aggregate computed in an inner subquery; ROW_NUMBER ranks
+    // over the alias, same pattern as the bm25 leg).
+    let ent_cte = format!(
+        "ent_ranked AS (
+            SELECT e.memory_id, ROW_NUMBER() OVER (ORDER BY e.n DESC, e.memory_id DESC) AS rnk
+            FROM (SELECT me.memory_id, COUNT(*) AS n
+                  FROM entities en
+                  JOIN memory_entities me ON me.entity_id = en.id
+                  WHERE length(en.norm_name) >= 3
+                    AND instr(' ' || :norm_query || ' ', ' ' || en.norm_name || ' ') > 0
+                  GROUP BY me.memory_id) e
+            JOIN memories m ON m.id = e.memory_id
+            WHERE {validity} AND {scope} {kind_filter}
+            ORDER BY rnk LIMIT {PER_SIGNAL_TOP}
+        )"
+    );
+
+    // RRF fusion over the active legs (vector always; lexical and entity
+    // when usable). Absent legs simply drop out of the union and sum.
+    let mut ctes = vec![vec_cte];
+    let mut unions = vec!["SELECT memory_id FROM vec_ranked".to_string()];
+    let mut joins = vec!["LEFT JOIN vec_ranked v ON v.memory_id = c.memory_id".to_string()];
+    let mut score_terms = vec![format!("COALESCE(1.0 / ({RRF_K} + v.rnk), 0)")];
+    if fts_query.is_some() {
+        ctes.push(fts_cte);
+        unions.push("SELECT memory_id FROM fts_ranked".to_string());
+        joins.push("LEFT JOIN fts_ranked f ON f.memory_id = c.memory_id".to_string());
+        score_terms.push(format!("COALESCE(1.0 / ({RRF_K} + f.rnk), 0)"));
+    }
+    if use_entities {
+        ctes.push(ent_cte);
+        unions.push("SELECT memory_id FROM ent_ranked".to_string());
+        joins.push("LEFT JOIN ent_ranked en ON en.memory_id = c.memory_id".to_string());
+        score_terms.push(format!("COALESCE(1.0 / ({RRF_K} + en.rnk), 0)"));
+    }
+    let sql = format!(
+        "WITH {ctes}
+         SELECT m.*, {score} AS score
+         FROM ({unions}) c
+         JOIN memories m ON m.id = c.memory_id
+         {joins}
+         ORDER BY score DESC, m.importance DESC, m.id DESC
+         LIMIT :limit",
+        ctes = ctes.join(", "),
+        score = score_terms.join(" + "),
+        unions = unions.join(" UNION "),
+        joins = joins.join("
+         "),
+    );
 
     let mut stmt = conn.prepare(&sql)?;
     let mut named: Vec<(&str, Value)> = vec![
@@ -186,6 +215,9 @@ pub fn search(
     ];
     if let Some(fts) = &fts_query {
         named.push((":fts", Value::Text(fts.clone())));
+    }
+    if use_entities {
+        named.push((":norm_query", Value::Text(norm_query.clone())));
     }
     if let Some(pid) = &params.project_id {
         named.push((":project_id", Value::Text(pid.clone())));

@@ -68,6 +68,58 @@ pub struct NewMemory {
     pub source_session_id: Option<i64>,
 }
 
+/// Entity kinds accepted by the schema.
+pub const ENTITY_KINDS: &[&str] = &["technology", "person", "project", "concept", "other"];
+
+/// One entity mentioned by a fact.
+#[derive(Debug, Clone)]
+pub struct EntityRef {
+    /// Display name as extracted.
+    pub name: String,
+    /// One of [`ENTITY_KINDS`]; anything else is stored as `other`.
+    pub kind: String,
+}
+
+/// One (source —predicate→ target) triple; names refer to entities.
+#[derive(Debug, Clone)]
+pub struct TripleRef {
+    /// Source entity name.
+    pub source: String,
+    /// Relation label, e.g. "uses", "deploys-to".
+    pub predicate: String,
+    /// Target entity name.
+    pub target: String,
+}
+
+/// Entity/triple payload attached to a memory insert.
+#[derive(Debug, Clone, Default)]
+pub struct GraphPayload {
+    /// Entities the fact mentions.
+    pub entities: Vec<EntityRef>,
+    /// Relations the fact evidences.
+    pub triples: Vec<TripleRef>,
+}
+
+/// Normalize an entity name (or free query text) for matching: lowercase,
+/// alphanumeric runs joined by single spaces.
+pub fn normalize_entity(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut prev_space = true;
+    for c in input.to_lowercase().chars() {
+        if c.is_alphanumeric() {
+            out.push(c);
+            prev_space = false;
+        } else if !prev_space {
+            out.push(' ');
+            prev_space = true;
+        }
+    }
+    while out.ends_with(' ') {
+        out.pop();
+    }
+    out
+}
+
 /// Memory kinds accepted by the schema.
 pub const MEMORY_KINDS: &[&str] = &["fact", "decision", "preference", "todo", "insight"];
 
@@ -205,6 +257,8 @@ pub fn get_memory(conn: &Connection, id: i64) -> Result<Option<Memory>> {
 /// Insert a memory and its embedding in ONE transaction; when `supersedes`
 /// is given, the same transaction stamps the old row's `invalid_at` and
 /// `superseded_by`. The superseded row must exist and be currently valid.
+/// When `graph` is present, its entities are upserted and mention/relation
+/// edges inserted in the same transaction (evidence = the new memory).
 ///
 /// Returns the new memory id.
 pub fn insert_memory(
@@ -212,6 +266,7 @@ pub fn insert_memory(
     new: &NewMemory,
     embedding: &[f32],
     supersedes: Option<i64>,
+    graph: Option<&GraphPayload>,
 ) -> Result<i64> {
     let tx = conn.transaction()?;
 
@@ -267,8 +322,187 @@ pub fn insert_memory(
         )?;
     }
 
+    if let Some(graph) = graph {
+        attach_graph(&tx, new_id, new.project_id.as_deref(), graph)?;
+    }
+
     tx.commit()?;
     Ok(new_id)
+}
+
+/// Upsert entities and insert mention + relation edges for one memory,
+/// inside the caller's transaction. Entities named only in triples are
+/// created too (kind `other`). Empty/degenerate names are skipped.
+fn attach_graph(
+    tx: &rusqlite::Transaction<'_>,
+    memory_id: i64,
+    project_id: Option<&str>,
+    graph: &GraphPayload,
+) -> Result<()> {
+    let upsert = |name: &str, kind: &str| -> Result<Option<i64>> {
+        let norm = normalize_entity(name);
+        if norm.is_empty() {
+            return Ok(None);
+        }
+        let kind = if ENTITY_KINDS.contains(&kind) { kind } else { "other" };
+        tx.execute(
+            "INSERT INTO entities (name, norm_name, kind, project_id)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(norm_name, ifnull(project_id, '')) DO NOTHING",
+            params![name.trim(), norm, kind, project_id],
+        )?;
+        let id: i64 = tx.query_row(
+            "SELECT id FROM entities
+             WHERE norm_name = ?1 AND ifnull(project_id,'') = ifnull(?2,'')",
+            params![norm, project_id],
+            |r| r.get(0),
+        )?;
+        Ok(Some(id))
+    };
+
+    for e in &graph.entities {
+        if let Some(entity_id) = upsert(&e.name, &e.kind)? {
+            tx.execute(
+                "INSERT OR IGNORE INTO memory_entities (memory_id, entity_id) VALUES (?1, ?2)",
+                params![memory_id, entity_id],
+            )?;
+        }
+    }
+    for t in &graph.triples {
+        let (Some(src), Some(dst)) = (upsert(&t.source, "other")?, upsert(&t.target, "other")?)
+        else {
+            continue;
+        };
+        let predicate = t.predicate.trim();
+        if predicate.is_empty() || src == dst {
+            continue;
+        }
+        // Triple endpoints count as mentions of this memory too.
+        for id in [src, dst] {
+            tx.execute(
+                "INSERT OR IGNORE INTO memory_entities (memory_id, entity_id) VALUES (?1, ?2)",
+                params![memory_id, id],
+            )?;
+        }
+        tx.execute(
+            "INSERT INTO relations (source_entity_id, predicate, target_entity_id, evidence_memory_id)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![src, predicate, dst, memory_id],
+        )?;
+    }
+    Ok(())
+}
+
+/// A node in a `get_related` neighborhood.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct GraphNode {
+    /// Entity id.
+    pub id: i64,
+    /// Display name.
+    pub name: String,
+    /// Entity kind.
+    pub kind: String,
+    /// Hop distance from the queried entity (0 = the entity itself).
+    pub hops: i64,
+}
+
+/// An edge in a `get_related` neighborhood.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct GraphEdge {
+    /// Source entity id.
+    pub source: i64,
+    /// Relation label.
+    pub predicate: String,
+    /// Target entity id.
+    pub target: i64,
+    /// Memory evidencing this relation (currently valid).
+    pub evidence_memory_id: i64,
+}
+
+/// Resolve an entity by normalized name within a scope (project OR global).
+pub fn resolve_entity(
+    conn: &Connection,
+    name: &str,
+    project_id: Option<&str>,
+) -> Result<Option<(i64, String, String)>> {
+    let norm = normalize_entity(name);
+    conn.query_row(
+        "SELECT id, name, kind FROM entities
+         WHERE norm_name = ?1 AND (project_id IS NULL OR project_id = ifnull(?2, project_id))
+         ORDER BY (project_id IS NULL) LIMIT 1",
+        params![norm, project_id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )
+    .optional()
+    .map_err(Error::from)
+}
+
+/// Breadth-first neighborhood of an entity over currently-valid relations
+/// (edges whose evidence memory has not been superseded). Returns nodes
+/// with hop distance and the edges connecting them.
+pub fn entity_neighborhood(
+    conn: &Connection,
+    entity_id: i64,
+    hops: i64,
+) -> Result<(Vec<GraphNode>, Vec<GraphEdge>)> {
+    let mut stmt = conn.prepare(
+        "SELECT r.source_entity_id, r.predicate, r.target_entity_id, r.evidence_memory_id
+         FROM relations r
+         JOIN memories m ON m.id = r.evidence_memory_id
+         WHERE (r.source_entity_id = ?1 OR r.target_entity_id = ?1)
+           AND m.invalid_at IS NULL",
+    )?;
+
+    let mut frontier = vec![entity_id];
+    let mut seen_nodes = std::collections::HashMap::from([(entity_id, 0i64)]);
+    let mut edges: Vec<GraphEdge> = Vec::new();
+    let mut seen_edges = std::collections::HashSet::new();
+
+    for depth in 1..=hops.max(1) {
+        let mut next = Vec::new();
+        for node in frontier.drain(..) {
+            let rows = stmt.query_map([node], |r| {
+                Ok(GraphEdge {
+                    source: r.get(0)?,
+                    predicate: r.get(1)?,
+                    target: r.get(2)?,
+                    evidence_memory_id: r.get(3)?,
+                })
+            })?;
+            for edge in rows {
+                let edge = edge?;
+                if seen_edges.insert((edge.source, edge.predicate.clone(), edge.target)) {
+                    for other in [edge.source, edge.target] {
+                        if let std::collections::hash_map::Entry::Vacant(v) =
+                            seen_nodes.entry(other)
+                        {
+                            v.insert(depth);
+                            next.push(other);
+                        }
+                    }
+                    edges.push(edge);
+                }
+            }
+        }
+        frontier = next;
+    }
+
+    let mut nodes = Vec::with_capacity(seen_nodes.len());
+    for (id, hop) in &seen_nodes {
+        let (name, kind): (String, String) = conn.query_row(
+            "SELECT name, kind FROM entities WHERE id = ?1",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        nodes.push(GraphNode {
+            id: *id,
+            name,
+            kind,
+            hops: *hop,
+        });
+    }
+    nodes.sort_by_key(|n| (n.hops, n.id));
+    Ok((nodes, edges))
 }
 
 /// Persist a session transcript (with its dedup hash). Returns the session id.

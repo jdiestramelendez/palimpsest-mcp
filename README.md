@@ -17,6 +17,7 @@ document that is rewritten at the end of each session.
 | `get_project_state` | Load a project's STATE.md, aliases and memory counts. Call at session start. |
 | `save_memory` | Save one durable fact (optionally superseding an outdated one). |
 | `search_memory` | Hybrid search with project scoping, kind filters and `as_of` time-travel. |
+| `get_related` | Explore the knowledge graph around an entity (1-2 hops, with evidence). |
 | `end_session` | Persist the transcript, extract durable facts, rewrite STATE.md. |
 
 ## Install
@@ -143,3 +144,7 @@ processed twice, so lifecycle hooks firing repeatedly are no-ops.
 - **Validity-filtered retrieval**: searches only return currently-valid
   facts (or the facts valid at `as_of`), and global memories
   (`project_id IS NULL`) are always included alongside project scope.
+- **Knowledge graph**: sessions also extract entities and relations;
+  search fuses a third, entity-match signal into the ranking, and
+  `get_related` walks the graph. Edges are evidenced by memories, so
+  superseding a fact expires its edges automatically.

@@ -18,7 +18,7 @@ use crate::error::{Error, Result};
 const SCHEMA_TEMPLATE: &str = include_str!("schema.sql");
 
 /// Schema version recorded in `meta` (bump on migration-worthy changes).
-const SCHEMA_VERSION: &str = "2";
+const SCHEMA_VERSION: &str = "3";
 
 static VEC_INIT: Once = Once::new();
 
@@ -129,10 +129,25 @@ impl Db {
                 "ALTER TABLE sessions ADD COLUMN transcript_hash TEXT;
                  CREATE INDEX IF NOT EXISTS idx_sessions_hash ON sessions(transcript_hash);",
             )?;
+        }
+        if version < 3 {
+            // The graph DDL is IF NOT EXISTS throughout; reuse it verbatim
+            // from the embedded schema (tail section, no {DIMS} references).
+            let graph_ddl = SCHEMA_TEMPLATE
+                .split("Entity graph (schema v3)")
+                .nth(1)
+                .ok_or_else(|| Error::Config("schema template missing graph section".into()))?;
+            let graph_ddl = graph_ddl
+                .split_once('\n')
+                .map(|(_, rest)| rest)
+                .unwrap_or(graph_ddl);
+            conn.execute_batch(graph_ddl)?;
+        }
+        if version < 3 || version < 2 {
             conn.execute(
-                "INSERT INTO meta (key, value) VALUES ('schema_version', '2')
-                 ON CONFLICT(key) DO UPDATE SET value = '2'",
-                [],
+                "INSERT INTO meta (key, value) VALUES ('schema_version', ?1)
+                 ON CONFLICT(key) DO UPDATE SET value = ?1",
+                [SCHEMA_VERSION],
             )?;
         }
         Ok(())
