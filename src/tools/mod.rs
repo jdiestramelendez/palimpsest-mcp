@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::core::ingest::{self, IngestOutcome};
-use crate::config::RetrievalConfig;
+use crate::config::{RetrievalConfig, ReviewConfig};
 use crate::core::retrieval::{self, RecencyBoost, SearchParams};
 use crate::db::queries::{self, NewMemory, MEMORY_KINDS};
 use crate::db::Db;
@@ -43,6 +43,7 @@ pub struct MemoryServer {
     embedder: Arc<dyn Embedder>,
     extractor: Arc<dyn Extractor>,
     retrieval_config: RetrievalConfig,
+    review_config: ReviewConfig,
     tool_router: ToolRouter<Self>,
 }
 
@@ -124,6 +125,22 @@ pub struct GetRelatedRequest {
     pub project: Option<String>,
 }
 
+/// Parameters for `review_memories`.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ReviewMemoriesRequest {
+    /// Project name, id, or alias to scope the review (global memories
+    /// included, except evergreen global preferences). Omit for all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    /// Maximum stale memories to list (default 20).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+    /// Ids reviewed and CONFIRMED still true: their usage timestamp is
+    /// touched so they leave the stale list until they age again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirm: Option<Vec<i64>>,
+}
+
 /// Build a tool-level error result with an agent-actionable message.
 fn tool_error(msg: impl Into<String>) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(msg.into())])
@@ -150,6 +167,7 @@ impl MemoryServer {
             embedder,
             extractor,
             retrieval_config: RetrievalConfig::default(),
+            review_config: ReviewConfig::default(),
             tool_router: Self::tool_router(),
         }
     }
@@ -157,6 +175,12 @@ impl MemoryServer {
     /// Set the retrieval scoring knobs (builder style).
     pub fn with_retrieval_config(mut self, config: RetrievalConfig) -> Self {
         self.retrieval_config = config;
+        self
+    }
+
+    /// Set the review/decay knobs (builder style).
+    pub fn with_review_config(mut self, config: ReviewConfig) -> Self {
+        self.review_config = config;
         self
     }
 
@@ -172,6 +196,7 @@ impl MemoryServer {
             embedder,
             extractor,
             retrieval_config: RetrievalConfig::default(),
+            review_config: ReviewConfig::default(),
             tool_router: Self::tool_router(),
         }
     }
@@ -532,6 +557,83 @@ impl MemoryServer {
                 "nodes": nodes,
                 "edges": edges,
             }))),
+            Err(e) => map_err(e),
+        }
+    }
+
+    /// Surface stale memories for periodic review; never deletes anything.
+    #[tool(
+        name = "review_memories",
+        description = "List currently-valid, low-importance memories that no search has touched in a long time (default 90 days), so stale knowledge gets reviewed instead of silently rotting. Resolve each one with existing primitives: pass its id in `confirm` if still true (refreshes its usage clock); call save_memory with `supersedes` if outdated or noise (use importance 1 to soft-archive). Nothing is ever deleted."
+    )]
+    pub async fn review_memories(
+        &self,
+        params: Parameters<ReviewMemoriesRequest>,
+    ) -> std::result::Result<CallToolResult, ErrorData> {
+        let req = params.0;
+        tracing::info!(project = ?req.project, confirm = ?req.confirm, "review_memories");
+
+        let db = self.db.lock().await;
+        let conn = db.conn();
+
+        let project_id = match &req.project {
+            Some(name) => match queries::resolve_project(conn, name) {
+                Ok(Some(p)) => Some(p.id),
+                Ok(None) => {
+                    let existing = queries::list_project_ids(conn).unwrap_or_default();
+                    return Ok(tool_error(format!(
+                        "project '{name}' not found. Existing projects: {}. \
+                         Retry with one of these, or omit `project` to review everything.",
+                        if existing.is_empty() { "(none)".to_string() } else { existing.join(", ") }
+                    )));
+                }
+                Err(e) => return map_err(e),
+            },
+            None => None,
+        };
+
+        // Confirmations first: reviewed-and-still-true memories get their
+        // usage clock touched via the sanctioned tracking-columns UPDATE.
+        let mut confirmed = 0usize;
+        if let Some(ids) = &req.confirm {
+            if !ids.is_empty() {
+                match queries::bump_retrieval(conn, ids) {
+                    Ok(()) => confirmed = ids.len(),
+                    Err(e) => return map_err(e),
+                }
+            }
+        }
+
+        let limit = req.limit.unwrap_or(20).clamp(1, 100);
+        match queries::stale_memories(
+            conn,
+            project_id.as_deref(),
+            self.review_config.stale_after_days,
+            self.review_config.max_importance,
+            limit,
+        ) {
+            Ok(rows) => {
+                let stale: Vec<serde_json::Value> = rows
+                    .iter()
+                    .map(|m| serde_json::json!({
+                        "memory_id": m.id,
+                        "project_id": m.project_id,
+                        "content": m.content,
+                        "kind": m.kind,
+                        "importance": m.importance,
+                        "valid_at": m.valid_at,
+                        "last_retrieved_at": m.last_retrieved_at,
+                        "retrieval_count": m.retrieval_count,
+                    }))
+                    .collect();
+                Ok(CallToolResult::structured(serde_json::json!({
+                    "stale": stale,
+                    "count": stale.len(),
+                    "confirmed": confirmed,
+                    "stale_after_days": self.review_config.stale_after_days,
+                    "guidance": "For each stale memory: still true -> include its id in `confirm` on the next call; outdated -> save_memory with `supersedes` and the corrected fact; noise -> save_memory with `supersedes` and importance 1.",
+                })))
+            }
             Err(e) => map_err(e),
         }
     }

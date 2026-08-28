@@ -1,6 +1,6 @@
 # 009 · [C] Decay/review: surface stale memories (never delete)
 
-**Priority:** C · **Status:** pending
+**Priority:** C · **Status:** done
 **Depends on:** 003 (usage tracking)
 
 ## Context
@@ -22,8 +22,11 @@ marking, never deleting, in keeping with the append-only invariant.
 - Exclude global preferences from staleness by default (they're evergreen).
 
 ## Acceptance criteria
-- [ ] Stale filter returns only valid, old-untouched, low-importance rows.
-- [ ] No new UPDATE/DELETE surface on memories content.
+- [x] Stale filter returns only valid, old-untouched, low-importance rows
+      (fresh, importance>3, superseded and global preferences excluded).
+- [x] No new UPDATE/DELETE surface on memories content: confirm reuses
+      bump_retrieval (usage columns only); corrections go through
+      save_memory supersession. CI invariant audit unchanged.
 
 ## Out of scope
 Automatic archiving; LLM-driven bulk review.

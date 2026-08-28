@@ -167,7 +167,8 @@ async fn serve(config: &Config, db_path: &std::path::Path) -> Result<(), Box<dyn
     let db = Db::open(db_path, config.embedder.dims)?;
     tracing::info!(db = %db_path.display(), "database ready");
     let (embedder, extractor) = providers::from_config(config)?;
-    let server = MemoryServer::new(db, embedder, extractor).with_retrieval_config(config.retrieval);
+    let server = MemoryServer::new(db, embedder, extractor).with_retrieval_config(config.retrieval)
+        .with_review_config(config.review);
     let service = server.serve(rmcp::transport::stdio()).await?;
     tracing::info!("palimpsest-mcp serving over stdio");
     service.waiting().await?;

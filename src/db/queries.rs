@@ -531,6 +531,53 @@ pub fn bump_retrieval(conn: &Connection, memory_ids: &[i64]) -> Result<()> {
     Ok(())
 }
 
+/// Currently-valid, low-importance memories that have not matched a
+/// search in `stale_after_days` (never-retrieved rows age from valid_at),
+/// oldest first. Global preferences are excluded: they are evergreen.
+/// This surfaces candidates for REVIEW — resolution goes through the
+/// existing primitives (confirm via [`bump_retrieval`], correct via
+/// supersession); nothing here mutates or deletes.
+pub fn stale_memories(
+    conn: &Connection,
+    project_id: Option<&str>,
+    stale_after_days: i64,
+    max_importance: i64,
+    limit: usize,
+) -> Result<Vec<Memory>> {
+    let scope = match project_id {
+        Some(_) => "AND (project_id = :pid OR project_id IS NULL)",
+        None => "",
+    };
+    let sql = format!(
+        "SELECT * FROM memories
+         WHERE invalid_at IS NULL
+           AND importance <= :max_importance
+           AND COALESCE(last_retrieved_at, valid_at)
+               < strftime('%Y-%m-%dT%H:%M:%fZ','now', '-' || :days || ' days')
+           AND NOT (project_id IS NULL AND kind = 'preference')
+           {scope}
+         ORDER BY COALESCE(last_retrieved_at, valid_at) ASC
+         LIMIT :limit"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let mut named: Vec<(&str, rusqlite::types::Value)> = vec![
+        (":max_importance", rusqlite::types::Value::Integer(max_importance)),
+        (":days", rusqlite::types::Value::Integer(stale_after_days)),
+        (":limit", rusqlite::types::Value::Integer(limit as i64)),
+    ];
+    if let Some(pid) = project_id {
+        named.push((":pid", rusqlite::types::Value::Text(pid.to_string())));
+    }
+    let refs: Vec<(&str, &dyn rusqlite::types::ToSql)> = named
+        .iter()
+        .map(|(k, v)| (*k, v as &dyn rusqlite::types::ToSql))
+        .collect();
+    let rows = stmt
+        .query_map(refs.as_slice(), row_to_memory)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
 /// Persist a session transcript (with its dedup hash). Returns the session id.
 pub fn insert_session(
     conn: &Connection,

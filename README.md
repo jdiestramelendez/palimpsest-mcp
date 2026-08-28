@@ -19,6 +19,7 @@ document that is rewritten at the end of each session.
 | `search_memory` | Hybrid search (vector + lexical + entity signals, recency-boosted) with project scoping, kind filters and `as_of` time-travel. |
 | `get_related` | Explore the knowledge graph around an entity (1-2 hops, with evidence). |
 | `end_session` | Persist the transcript, extract durable facts, rewrite STATE.md. |
+| `review_memories` | Surface stale memories for review (confirm / supersede — never delete). |
 
 ## Install
 
@@ -49,6 +50,10 @@ dims = 768                   # pinned into the DB at first creation;
 recency_weight = 0.25        # score multiplier: 1 + w * exp(-age/half_life)
 recency_half_life_days = 30  # 0 weight disables the boost; as_of searches
                              # never apply it
+
+[review]
+stale_after_days = 90        # memories unseen this long surface for review
+max_importance = 3           # only importance <= this is surfaced
 
 [extractor]
 provider = "ollama"          # "ollama" | "anthropic" | "openai"

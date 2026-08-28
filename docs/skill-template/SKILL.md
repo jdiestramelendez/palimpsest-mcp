@@ -36,6 +36,15 @@ this project's name. This extracts durable facts and rewrites the state
 document that the next session will start from. Report the returned counts
 to the user in one line.
 
+## Periodic review
+
+Every couple of weeks (or when the user asks to "clean up memory"), call
+`review_memories` for this project. For each stale memory listed:
+- still true -> include its id in `confirm` on the next call;
+- outdated -> `save_memory` with `supersedes` and the corrected fact;
+- noise -> `save_memory` with `supersedes` and importance 1.
+Report a one-line summary of what was confirmed/corrected.
+
 ## Rules
 
 - Never store secrets (API keys, tokens, passwords) in memories.

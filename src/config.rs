@@ -107,6 +107,26 @@ impl Default for RetrievalConfig {
     }
 }
 
+/// Review/decay knobs (`[review]` in config.toml).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ReviewConfig {
+    /// A memory is stale when it has not matched a search in this many
+    /// days (never-retrieved memories age from their valid_at).
+    pub stale_after_days: i64,
+    /// Only memories at or below this importance are surfaced for review.
+    pub max_importance: i64,
+}
+
+impl Default for ReviewConfig {
+    fn default() -> Self {
+        Self {
+            stale_after_days: 90,
+            max_importance: 3,
+        }
+    }
+}
+
 /// Top-level configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -119,6 +139,8 @@ pub struct Config {
     pub db_path: Option<PathBuf>,
     /// Retrieval scoring knobs.
     pub retrieval: RetrievalConfig,
+    /// Review/decay knobs.
+    pub review: ReviewConfig,
 }
 
 impl Config {
