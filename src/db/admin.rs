@@ -160,3 +160,189 @@ pub fn restore_database(db_path: &Path, source: &Path, dims: usize) -> Result<Pa
     std::fs::rename(&tmp, db_path)?;
     Ok(kept_aside.unwrap_or_else(|| db_path.to_path_buf()))
 }
+
+/// Meta key holding the embedder model the vectors were produced with.
+pub const META_EMBEDDER_MODEL: &str = "embedder_model";
+
+/// Statistics from a completed reembed.
+#[derive(Debug)]
+pub struct ReembedStats {
+    /// Memories re-embedded.
+    pub memories: usize,
+    /// Where the previous database was kept.
+    pub previous: PathBuf,
+}
+
+/// Re-embed every memory with the CURRENT config's embedder into a fresh
+/// database, then swap it in. All rows (ids, validity, supersession links,
+/// sessions, projects, graph) are copied verbatim — only `memories_vec`
+/// (and the pinned dims/model in `meta`) change. The old database is kept
+/// as `.pre-reembed-<ts>`, never deleted.
+///
+/// Refuses to run when the stored dims AND recorded model already match
+/// the config (a guaranteed no-op).
+pub async fn reembed_database(
+    db_path: &Path,
+    embedder: &dyn crate::providers::Embedder,
+    new_model: &str,
+    batch_size: usize,
+) -> Result<ReembedStats> {
+    if !db_path.exists() {
+        return Err(Error::InvalidInput(format!(
+            "no database at {}; nothing to re-embed",
+            db_path.display()
+        )));
+    }
+    let new_dims = embedder.dims();
+    let batch_size = batch_size.clamp(1, 512);
+
+    // Inspect the source WITHOUT enforcing config dims (the mismatch is
+    // exactly why the user is here).
+    let src = rusqlite::Connection::open(db_path)?;
+    let stored_dims: usize = src
+        .query_row("SELECT value FROM meta WHERE key = 'embedding_dims'", [], |r| {
+            r.get::<_, String>(0)
+        })
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .ok_or_else(|| Error::Config("source database has no pinned dims".into()))?;
+    let stored_model: Option<String> = src
+        .query_row(
+            "SELECT value FROM meta WHERE key = ?1",
+            [META_EMBEDDER_MODEL],
+            |r| r.get(0),
+        )
+        .ok();
+    if stored_dims == new_dims && stored_model.as_deref() == Some(new_model) {
+        return Err(Error::InvalidInput(format!(
+            "database is already embedded with '{new_model}' at {new_dims} dims; nothing to do"
+        )));
+    }
+    drop(src);
+
+    // Fresh database at the new dims; copy every non-vector table verbatim
+    // via ATTACH (FTS refills itself through the insert triggers).
+    let tmp = db_path.with_extension("reembed-tmp");
+    let _ = std::fs::remove_file(&tmp);
+    let result = async {
+        let mut new_db = Db::open(&tmp, new_dims)?;
+        new_db.conn().execute(
+            "ATTACH DATABASE ?1 AS src",
+            [db_path.to_string_lossy().as_ref()],
+        )?;
+        new_db.conn().execute_batch(
+            "BEGIN;
+             INSERT INTO projects SELECT * FROM src.projects;
+             INSERT INTO sessions SELECT * FROM src.sessions;
+             INSERT INTO memories SELECT * FROM src.memories;
+             INSERT INTO entities SELECT * FROM src.entities;
+             INSERT INTO memory_entities SELECT * FROM src.memory_entities;
+             INSERT INTO relations SELECT * FROM src.relations;
+             COMMIT;",
+        )?;
+        new_db.conn().execute_batch("DETACH DATABASE src")?;
+
+        // Batch re-embedding, one transaction per batch.
+        let rows: Vec<(i64, String)> = {
+            let mut stmt = new_db
+                .conn()
+                .prepare("SELECT id, content FROM memories ORDER BY id")?;
+            let collected = stmt
+                .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            collected
+        };
+        let total = rows.len();
+        for (done, batch) in rows.chunks(batch_size).enumerate() {
+            let texts: Vec<String> = batch.iter().map(|(_, c)| c.clone()).collect();
+            let vectors = embedder.embed(&texts).await?;
+            if vectors.len() != batch.len() {
+                return Err(Error::Provider(format!(
+                    "embedder returned {} vectors for {} inputs",
+                    vectors.len(),
+                    batch.len()
+                )));
+            }
+            let tx = new_db.conn_mut().transaction()?;
+            for ((id, _), vector) in batch.iter().zip(&vectors) {
+                if vector.len() != new_dims {
+                    return Err(Error::Provider(format!(
+                        "embedder produced {} dims, expected {new_dims}",
+                        vector.len()
+                    )));
+                }
+                tx.execute(
+                    "INSERT INTO memories_vec (memory_id, embedding) VALUES (?1, ?2)",
+                    rusqlite::params![id, crate::db::queries::embedding_to_blob(vector)],
+                )?;
+            }
+            tx.commit()?;
+            tracing::info!(
+                embedded = (done * batch_size + batch.len()).min(total),
+                total,
+                "reembed progress"
+            );
+        }
+
+        // Sanity: row counts must match the source exactly.
+        new_db.conn().execute(
+            "ATTACH DATABASE ?1 AS src",
+            [db_path.to_string_lossy().as_ref()],
+        )?;
+        for table in ["projects", "sessions", "memories", "entities", "memory_entities", "relations"] {
+            let (a, b): (i64, i64) = new_db.conn().query_row(
+                &format!("SELECT (SELECT COUNT(*) FROM {table}), (SELECT COUNT(*) FROM src.{table})"),
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?;
+            if a != b {
+                return Err(Error::Config(format!(
+                    "count mismatch in {table}: {a} vs {b}; aborting swap"
+                )));
+            }
+        }
+        let vec_count: i64 = new_db
+            .conn()
+            .query_row("SELECT COUNT(*) FROM memories_vec", [], |r| r.get(0))?;
+        if vec_count as usize != total {
+            return Err(Error::Config(format!(
+                "vector count {vec_count} != memory count {total}; aborting swap"
+            )));
+        }
+        new_db.conn().execute_batch("DETACH DATABASE src")?;
+        new_db.set_meta(META_EMBEDDER_MODEL, new_model)?;
+        Ok(total)
+    }
+    .await;
+
+    let total = match result {
+        Ok(t) => t,
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e);
+        }
+    };
+
+    // Swap: keep the old database aside, move the new one into place.
+    let aside = db_path.with_extension(format!("pre-reembed-{}", timestamp()));
+    std::fs::rename(db_path, &aside)?;
+    for suffix in ["-wal", "-shm"] {
+        let side = PathBuf::from(format!("{}{suffix}", db_path.display()));
+        if side.exists() {
+            let _ = std::fs::rename(&side, PathBuf::from(format!("{}{suffix}", aside.display())));
+        }
+    }
+    std::fs::rename(&tmp, db_path)?;
+    // The fresh file's own -wal/-shm (if any) follow the rename by name.
+    for suffix in ["-wal", "-shm"] {
+        let side = PathBuf::from(format!("{}{suffix}", tmp.display()));
+        if side.exists() {
+            let _ = std::fs::rename(&side, PathBuf::from(format!("{}{suffix}", db_path.display())));
+        }
+    }
+
+    Ok(ReembedStats {
+        memories: total,
+        previous: aside,
+    })
+}

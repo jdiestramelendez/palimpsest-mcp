@@ -1,6 +1,6 @@
 # 008 · [C] reembed command (switch embedders safely)
 
-**Priority:** C · **Status:** pending
+**Priority:** C · **Status:** done
 
 ## Context
 Dims are pinned at DB creation and mismatches refuse to open (by design).
@@ -22,9 +22,15 @@ Dims are pinned at DB creation and mismatches refuse to open (by design).
   target dims are equal AND the model name is unchanged (no-op guard).
 
 ## Acceptance criteria
-- [ ] After reembed, the DB opens with the new config and search works.
-- [ ] Row counts and supersession links identical pre/post.
-- [ ] Old file preserved.
+- [x] After reembed, the DB opens with the new config and search works
+      (old dims refused; hybrid search returns the valid fact).
+- [x] Row counts and supersession links identical pre/post (verified for
+      memories/sessions/entities/relations + per-table count sanity check
+      that aborts the swap on mismatch).
+- [x] Old file preserved (.pre-reembed-<ts>, still opens at old dims).
+      Extra: no-op guard via the embedder model recorded in meta (only
+      reembed may overwrite it; serve/ingest record it if absent), and a
+      provider failure cleans the tmp file leaving the live DB intact.
 
 ## Out of scope
 Incremental/partial re-embedding; embedding-version tracking per row.

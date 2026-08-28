@@ -42,7 +42,7 @@ Everything is optional; the defaults use a local Ollama with no API keys.
 provider = "ollama"          # "ollama" | "openai"
 model = "nomic-embed-text"
 dims = 768                   # pinned into the DB at first creation;
-                             # changing it later requires re-embedding
+                             # switch models/dims with `palimpsest-mcp reembed`
 # base_url = "http://localhost:11434"
 # api_key_env = "OPENAI_API_KEY"      # env var read for cloud providers
 
@@ -143,6 +143,7 @@ palimpsest-mcp graph --project my-app \
     --out graph.html                             # knowledge graph viewer
 palimpsest-mcp backup [--out f] [--keep N]       # online snapshot (WAL-safe)
 palimpsest-mcp restore <file>                    # verified swap; old DB kept
+palimpsest-mcp reembed [--batch-size N]          # switch embedders safely
 ```
 
 `backup` snapshots the live database with SQLite's backup API (safe while
@@ -152,6 +153,13 @@ the server is running); defaults land in `~/.palimpsest-mcp/backups/` and
 previous database is renamed `.pre-restore-<ts>` — never deleted. For
 continuous off-site replication, point [litestream](https://litestream.io)
 at the database file.
+
+`reembed` is the sanctioned way to change embedders: it re-embeds every
+memory with the current config's model into a fresh database (all rows,
+ids, supersession links and graph copied verbatim; only the vectors and
+the pinned dims/model change), verifies row counts, then swaps — the old
+database is kept as `.pre-reembed-<ts>`. Running it when the stored model
+and dims already match is refused as a no-op.
 
 `graph` exports the knowledge graph: a **self-contained HTML viewer**
 (force layout, hover tooltips with the evidence memory, and a time slider

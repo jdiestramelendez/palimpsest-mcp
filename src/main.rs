@@ -54,6 +54,13 @@ enum Command {
         #[arg(long, value_parser = ["text", "claude-jsonl"], default_value = "text")]
         format: String,
     },
+    /// Re-embed every memory with the CURRENT config's embedder into a
+    /// fresh database, then swap (old file kept as .pre-reembed-*).
+    Reembed {
+        /// Memories embedded per provider call.
+        #[arg(long, default_value_t = 32)]
+        batch_size: usize,
+    },
     /// Take an online backup of the database (safe while the server runs).
     Backup {
         /// Destination file (default: ~/.palimpsest-mcp/backups/palimpsest-<ts>.db).
@@ -137,6 +144,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             run_ingest(&config, &db_path, project, &client, &text).await
         }
+        Some(Command::Reembed { batch_size }) => {
+            let embedder = providers::embedder_from_config(&config)?;
+            let stats = palimpsest_mcp::db::admin::reembed_database(
+                &db_path,
+                embedder.as_ref(),
+                &config.embedder.model,
+                batch_size,
+            )
+            .await?;
+            println!(
+                "re-embedded {} memories with '{}' ({} dims); previous database kept at {}",
+                stats.memories,
+                config.embedder.model,
+                config.embedder.dims,
+                stats.previous.display()
+            );
+            Ok(())
+        }
         Some(Command::Backup { out, keep }) => {
             let dest = palimpsest_mcp::db::admin::backup_database(&db_path, out, keep)?;
             println!("backup written to {}", dest.display());
@@ -199,6 +224,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Serve the MCP tool set over stdio.
 async fn serve(config: &Config, db_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
     let db = Db::open(db_path, config.embedder.dims)?;
+    db.set_meta_if_absent(
+        palimpsest_mcp::db::admin::META_EMBEDDER_MODEL,
+        &config.embedder.model,
+    )?;
     tracing::info!(db = %db_path.display(), "database ready");
     let (embedder, extractor) = providers::from_config(config)?;
     let server = MemoryServer::new(db, embedder, extractor).with_retrieval_config(config.retrieval)
@@ -218,6 +247,10 @@ async fn run_ingest(
     transcript: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut db = Db::open(db_path, config.embedder.dims)?;
+    db.set_meta_if_absent(
+        palimpsest_mcp::db::admin::META_EMBEDDER_MODEL,
+        &config.embedder.model,
+    )?;
     let (embedder, extractor) = providers::from_config(config)?;
 
     let project_id = match &project {

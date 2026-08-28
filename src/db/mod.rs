@@ -172,6 +172,38 @@ impl Db {
         Ok(())
     }
 
+    /// Read a meta value.
+    pub fn get_meta(&self, key: &str) -> Result<Option<String>> {
+        use rusqlite::OptionalExtension;
+        self.conn
+            .query_row("SELECT value FROM meta WHERE key = ?1", [key], |r| r.get(0))
+            .optional()
+            .map_err(Error::from)
+    }
+
+    /// Write a meta value (upsert).
+    pub fn set_meta(&self, key: &str, value: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO meta (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = ?2",
+            [key, value],
+        )?;
+        Ok(())
+    }
+
+    /// Write a meta value only when the key is absent. Used to record the
+    /// embedder model on first contact without clobbering it later (a
+    /// changed config must NOT silently look like the pinned model —
+    /// `reembed` is the only writer allowed to overwrite it).
+    pub fn set_meta_if_absent(&self, key: &str, value: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO meta (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO NOTHING",
+            [key, value],
+        )?;
+        Ok(())
+    }
+
     /// The embedding dimensionality this database was created with.
     pub fn dims(&self) -> usize {
         self.dims

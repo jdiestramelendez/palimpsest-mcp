@@ -36,12 +36,10 @@ pub trait Extractor: Send + Sync {
     async fn complete(&self, system: &str, user: &str) -> Result<String>;
 }
 
-/// Build the configured embedder + extractor pair.
-///
-/// Cloud providers read their API key from the environment variable named in
-/// the config; a missing key is reported with the variable name.
-pub fn from_config(config: &Config) -> Result<(Arc<dyn Embedder>, Arc<dyn Extractor>)> {
-    let embedder: Arc<dyn Embedder> = match config.embedder.provider {
+/// Build just the configured embedder (used by `reembed` and the eval
+/// harness, which have no need for an extractor).
+pub fn embedder_from_config(config: &Config) -> Result<Arc<dyn Embedder>> {
+    Ok(match config.embedder.provider {
         EmbedderProvider::Ollama => Arc::new(ollama::OllamaEmbedder::new(
             config.embedder.base_url.clone(),
             config.embedder.model.clone(),
@@ -53,7 +51,15 @@ pub fn from_config(config: &Config) -> Result<(Arc<dyn Embedder>, Arc<dyn Extrac
             config.embedder.dims,
             Config::api_key(&config.embedder.api_key_env)?,
         )),
-    };
+    })
+}
+
+/// Build the configured embedder + extractor pair.
+///
+/// Cloud providers read their API key from the environment variable named in
+/// the config; a missing key is reported with the variable name.
+pub fn from_config(config: &Config) -> Result<(Arc<dyn Embedder>, Arc<dyn Extractor>)> {
+    let embedder = embedder_from_config(config)?;
     let extractor: Arc<dyn Extractor> = match config.extractor.provider {
         ExtractorProvider::Ollama => Arc::new(ollama::OllamaExtractor::new(
             config.extractor.base_url.clone(),
