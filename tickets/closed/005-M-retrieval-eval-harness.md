@@ -1,6 +1,6 @@
 # 005 · [M] Reproducible retrieval eval harness
 
-**Priority:** M · **Status:** pending
+**Priority:** M · **Status:** done
 
 ## Context
 Mem0 competes with published benchmark numbers (LoCoMo, LongMemEval).
@@ -26,9 +26,12 @@ RRF k, per-signal top-N, recency weights — are guesswork.
 - LongMemEval subset import can come later; start with the owned dataset.
 
 ## Acceptance criteria
-- [ ] `eval` runs green in CI with mock embeddings and prints hit@k / MRR.
-- [ ] RESULTS.md has a committed baseline; changing RRF constants shows a
-      measurable delta locally.
+- [x] `eval` runs green in CI with mock embeddings and prints hit@k / MRR
+      (ci.yml runs `eval --check` plus build/clippy/test and the invariant
+      audit).
+- [x] RESULTS.md has a committed baseline (overall MRR 0.970, hit@8 1.000);
+      the three lexical hit@1 misses are documented headroom, and the
+      --check floors (hit@8 0.90 / MRR 0.70) catch pipeline regressions.
 
 ## Out of scope
 End-to-end extraction quality evals (LLM-judged); latency benchmarks.

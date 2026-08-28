@@ -139,6 +139,14 @@ palimpsest-mcp hook session-end                  #   (hook JSON on stdin)
 Ingestion is idempotent: the same transcript content (sha256) is never
 processed twice, so lifecycle hooks firing repeatedly are no-ops.
 
+## Retrieval quality
+
+`evals/` holds a deterministic eval harness: `cargo run --bin eval` scores
+hit@1/3/8 and MRR over a seeded dataset (lexical, semantic, diacritics,
+entity, as_of and global cases); `--check` enforces committed floors in CI
+and `--provider ollama` runs it against real embeddings. Baseline lives in
+`evals/RESULTS.md`.
+
 ## Guarantees
 
 - **Append-only history**: no memory row is ever hard-deleted and content

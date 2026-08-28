@@ -1,0 +1,1301 @@
+{
+ "dims": 32,
+ "vector_groups": [
+  {
+   "axis": 1,
+   "texts": [
+    "how do we authenticate users",
+    "login relies on signed tokens issued by the gateway"
+   ]
+  },
+  {
+   "axis": 2,
+   "texts": [
+    "when does content reload",
+    "screens refresh their data when the app returns to foreground"
+   ]
+  },
+  {
+   "axis": 3,
+   "texts": [
+    "error telemetry policy",
+    "crash reports upload only on wifi to save bandwidth"
+   ]
+  },
+  {
+   "axis": 4,
+   "texts": [
+    "kubernetes restart behaviour"
+   ]
+  },
+  {
+   "axis": 14,
+   "texts": [
+    "the container platform restarts unhealthy pods automatically"
+   ]
+  },
+  {
+   "axis": 5,
+   "texts": [
+    "airflow schedule"
+   ]
+  },
+  {
+   "axis": 15,
+   "texts": [
+    "nightly aggregation jobs write parquet snapshots to the lake"
+   ]
+  },
+  {
+   "axis": 6,
+   "texts": [
+    "order storage engine",
+    "orders are stored in a JSON flat file",
+    "orders are stored in PostgreSQL"
+   ]
+  },
+  {
+   "axis": 7,
+   "texts": [
+    "backup cadence",
+    "backups run weekly on sundays",
+    "backups run nightly at 03:00 UTC"
+   ]
+  },
+  {
+   "axis": 8,
+   "texts": [
+    "indentation preference",
+    "the user prefers 2-space indentation in every language"
+   ]
+  },
+  {
+   "axis": 9,
+   "texts": [
+    "ingestion pipeline batching",
+    "the ingestion pipeline batches events every 5 minutes"
+   ]
+  },
+  {
+   "axis": 10,
+   "texts": [
+    "which vaults hold infrastructure snapshots",
+    "terraform state lives in a remote bucket"
+   ]
+  },
+  {
+   "axis": 11,
+   "texts": [
+    "who gets woken up by incidents",
+    "alerts page the on call rotation"
+   ]
+  },
+  {
+   "axis": 12,
+   "texts": [
+    "night theme behaviour",
+    "dark mode follows the system setting"
+   ]
+  },
+  {
+   "axis": 13,
+   "texts": [
+    "how are straggler records handled",
+    "late events are dropped after two hours"
+   ]
+  },
+  {
+   "axis": 16,
+   "texts": [
+    "credential rollover policy",
+    "secrets rotate every quarter"
+   ]
+  },
+  {
+   "axis": 17,
+   "texts": [
+    "first run walkthrough",
+    "the onboarding flow has three screens"
+   ]
+  },
+  {
+   "axis": 18,
+   "texts": [
+    "duplicated telemetry cleanup",
+    "duplicate events are removed by event id"
+   ]
+  },
+  {
+   "axis": 19,
+   "texts": [
+    "monitoring visualization location",
+    "pipeline dashboards live in grafana"
+   ]
+  }
+ ],
+ "memories": [
+  {
+   "id": "m1",
+   "project": "shop-api",
+   "content": "checkout retries use the idempotency-key header on POST /orders",
+   "kind": "decision",
+   "importance": 4
+  },
+  {
+   "id": "m2",
+   "project": "shop-api",
+   "content": "rate limiting is 120 requests per minute per api token",
+   "kind": "fact",
+   "importance": 3
+  },
+  {
+   "id": "m3",
+   "project": "shop-api",
+   "content": "the webhook signature uses HMAC-SHA256 with the tenant secret",
+   "kind": "fact",
+   "importance": 4
+  },
+  {
+   "id": "m4",
+   "project": "shop-api",
+   "content": "refunds older than 90 days require manual finance approval",
+   "kind": "fact",
+   "importance": 3
+  },
+  {
+   "id": "m5",
+   "project": "mobile-app",
+   "content": "login relies on signed tokens issued by the gateway",
+   "kind": "fact",
+   "importance": 4
+  },
+  {
+   "id": "m6",
+   "project": "mobile-app",
+   "content": "screens refresh their data when the app returns to foreground",
+   "kind": "fact",
+   "importance": 3
+  },
+  {
+   "id": "m7",
+   "project": "mobile-app",
+   "content": "crash reports upload only on wifi to save bandwidth",
+   "kind": "decision",
+   "importance": 3
+  },
+  {
+   "id": "m8",
+   "project": "infra",
+   "content": "la configuracion de produccion vive en config/prod.toml",
+   "kind": "fact",
+   "importance": 4
+  },
+  {
+   "id": "m9",
+   "project": "infra",
+   "content": "el despliegue automatico corre cada miercoles",
+   "kind": "fact",
+   "importance": 3
+  },
+  {
+   "id": "m10",
+   "project": "infra",
+   "content": "the container platform restarts unhealthy pods automatically",
+   "kind": "fact",
+   "importance": 3,
+   "entities": [
+    {
+     "name": "Kubernetes",
+     "kind": "technology"
+    }
+   ]
+  },
+  {
+   "id": "m11",
+   "project": "data-pipeline",
+   "content": "nightly aggregation jobs write parquet snapshots to the lake",
+   "kind": "fact",
+   "importance": 3,
+   "entities": [
+    {
+     "name": "Airflow",
+     "kind": "technology"
+    }
+   ]
+  },
+  {
+   "id": "m12",
+   "project": "shop-api",
+   "content": "orders are stored in a JSON flat file",
+   "kind": "decision",
+   "importance": 4,
+   "backdate_days": 120
+  },
+  {
+   "id": "m13",
+   "project": "shop-api",
+   "content": "orders are stored in PostgreSQL",
+   "kind": "decision",
+   "importance": 4,
+   "supersedes": "m12"
+  },
+  {
+   "id": "m14",
+   "project": "infra",
+   "content": "backups run weekly on sundays",
+   "kind": "fact",
+   "importance": 3,
+   "backdate_days": 200
+  },
+  {
+   "id": "m15",
+   "project": "infra",
+   "content": "backups run nightly at 03:00 UTC",
+   "kind": "fact",
+   "importance": 3,
+   "supersedes": "m14"
+  },
+  {
+   "id": "m16",
+   "project": null,
+   "content": "the user prefers 2-space indentation in every language",
+   "kind": "preference",
+   "importance": 4
+  },
+  {
+   "id": "m17",
+   "project": null,
+   "content": "the user's machine is an arm64 mac with 16gb of ram",
+   "kind": "fact",
+   "importance": 3
+  },
+  {
+   "id": "m18",
+   "project": "data-pipeline",
+   "content": "the ingestion pipeline batches events every 5 minutes",
+   "kind": "fact",
+   "importance": 3
+  },
+  {
+   "id": "m19",
+   "project": "data-pipeline",
+   "content": "pipeline dashboards live in grafana",
+   "kind": "fact",
+   "importance": 3
+  },
+  {
+   "id": "m20",
+   "project": "shop-api",
+   "content": "the staging environment resets its database every night",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m21",
+   "project": "shop-api",
+   "content": "product images are served from a cdn bucket",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m22",
+   "project": "shop-api",
+   "content": "the tax service is stubbed in local development",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m23",
+   "project": "shop-api",
+   "content": "feature flags are read from the environment at boot",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m24",
+   "project": "shop-api",
+   "content": "the admin panel uses server side rendering",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m25",
+   "project": "mobile-app",
+   "content": "the design system defines eight spacing steps",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m26",
+   "project": "mobile-app",
+   "content": "push notifications are batched by campaign",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m27",
+   "project": "mobile-app",
+   "content": "the onboarding flow has three screens",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m28",
+   "project": "mobile-app",
+   "content": "dark mode follows the system setting",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m29",
+   "project": "mobile-app",
+   "content": "the settings screen lists licenses",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m30",
+   "project": "infra",
+   "content": "terraform state lives in a remote bucket",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m31",
+   "project": "infra",
+   "content": "alerts page the on call rotation",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m32",
+   "project": "infra",
+   "content": "secrets rotate every quarter",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m33",
+   "project": "infra",
+   "content": "the vpn is required for database access",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m34",
+   "project": "infra",
+   "content": "staging certificates renew automatically",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m35",
+   "project": "data-pipeline",
+   "content": "schema changes require a migration review",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m36",
+   "project": "data-pipeline",
+   "content": "late events are dropped after two hours",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m37",
+   "project": "data-pipeline",
+   "content": "the warehouse compacts partitions weekly",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m38",
+   "project": "data-pipeline",
+   "content": "sampling is disabled in production",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m39",
+   "project": "data-pipeline",
+   "content": "duplicate events are removed by event id",
+   "kind": "fact",
+   "importance": 2
+  },
+  {
+   "id": "m40",
+   "project": "shop-api",
+   "content": "team agreed that billing number 0 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m41",
+   "project": "mobile-app",
+   "content": "service component sync handles internal case 1",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m42",
+   "project": "infra",
+   "content": "the cache module owns configuration entry 2",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m43",
+   "project": "data-pipeline",
+   "content": "runbook section audit covers scenario 3",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m44",
+   "project": "shop-api",
+   "content": "team agreed that quota number 4 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m45",
+   "project": "mobile-app",
+   "content": "service component search handles internal case 5",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m46",
+   "project": "infra",
+   "content": "the billing module owns configuration entry 6",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m47",
+   "project": "data-pipeline",
+   "content": "runbook section sync covers scenario 7",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m48",
+   "project": "shop-api",
+   "content": "team agreed that cache number 8 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m49",
+   "project": "mobile-app",
+   "content": "service component audit handles internal case 9",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m50",
+   "project": "infra",
+   "content": "the quota module owns configuration entry 10",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m51",
+   "project": "data-pipeline",
+   "content": "runbook section search covers scenario 11",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m52",
+   "project": "shop-api",
+   "content": "team agreed that billing number 12 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m53",
+   "project": "mobile-app",
+   "content": "service component sync handles internal case 13",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m54",
+   "project": "infra",
+   "content": "the cache module owns configuration entry 14",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m55",
+   "project": "data-pipeline",
+   "content": "runbook section audit covers scenario 15",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m56",
+   "project": "shop-api",
+   "content": "team agreed that quota number 16 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m57",
+   "project": "mobile-app",
+   "content": "service component search handles internal case 17",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m58",
+   "project": "infra",
+   "content": "the billing module owns configuration entry 18",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m59",
+   "project": "data-pipeline",
+   "content": "runbook section sync covers scenario 19",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m60",
+   "project": "shop-api",
+   "content": "team agreed that cache number 20 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m61",
+   "project": "mobile-app",
+   "content": "service component audit handles internal case 21",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m62",
+   "project": "infra",
+   "content": "the quota module owns configuration entry 22",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m63",
+   "project": "data-pipeline",
+   "content": "runbook section search covers scenario 23",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m64",
+   "project": "shop-api",
+   "content": "team agreed that billing number 24 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m65",
+   "project": "mobile-app",
+   "content": "service component sync handles internal case 25",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m66",
+   "project": "infra",
+   "content": "the cache module owns configuration entry 26",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m67",
+   "project": "data-pipeline",
+   "content": "runbook section audit covers scenario 27",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m68",
+   "project": "shop-api",
+   "content": "team agreed that quota number 28 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m69",
+   "project": "mobile-app",
+   "content": "service component search handles internal case 29",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m70",
+   "project": "infra",
+   "content": "the billing module owns configuration entry 30",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m71",
+   "project": "data-pipeline",
+   "content": "runbook section sync covers scenario 31",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m72",
+   "project": "shop-api",
+   "content": "team agreed that cache number 32 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m73",
+   "project": "mobile-app",
+   "content": "service component audit handles internal case 33",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m74",
+   "project": "infra",
+   "content": "the quota module owns configuration entry 34",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m75",
+   "project": "data-pipeline",
+   "content": "runbook section search covers scenario 35",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m76",
+   "project": "shop-api",
+   "content": "team agreed that billing number 36 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m77",
+   "project": "mobile-app",
+   "content": "service component sync handles internal case 37",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m78",
+   "project": "infra",
+   "content": "the cache module owns configuration entry 38",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m79",
+   "project": "data-pipeline",
+   "content": "runbook section audit covers scenario 39",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m80",
+   "project": "shop-api",
+   "content": "team agreed that quota number 40 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m81",
+   "project": "mobile-app",
+   "content": "service component search handles internal case 41",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m82",
+   "project": "infra",
+   "content": "the billing module owns configuration entry 42",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m83",
+   "project": "data-pipeline",
+   "content": "runbook section sync covers scenario 43",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m84",
+   "project": "shop-api",
+   "content": "team agreed that cache number 44 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m85",
+   "project": "mobile-app",
+   "content": "service component audit handles internal case 45",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m86",
+   "project": "infra",
+   "content": "the quota module owns configuration entry 46",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m87",
+   "project": "data-pipeline",
+   "content": "runbook section search covers scenario 47",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m88",
+   "project": "shop-api",
+   "content": "team agreed that billing number 48 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m89",
+   "project": "mobile-app",
+   "content": "service component sync handles internal case 49",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m90",
+   "project": "infra",
+   "content": "the cache module owns configuration entry 50",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m91",
+   "project": "data-pipeline",
+   "content": "runbook section audit covers scenario 51",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m92",
+   "project": "shop-api",
+   "content": "team agreed that quota number 52 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m93",
+   "project": "mobile-app",
+   "content": "service component search handles internal case 53",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m94",
+   "project": "infra",
+   "content": "the billing module owns configuration entry 54",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m95",
+   "project": "data-pipeline",
+   "content": "runbook section sync covers scenario 55",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m96",
+   "project": "shop-api",
+   "content": "team agreed that cache number 56 is documented in the wiki",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m97",
+   "project": "mobile-app",
+   "content": "service component audit handles internal case 57",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m98",
+   "project": "infra",
+   "content": "the quota module owns configuration entry 58",
+   "kind": "fact",
+   "importance": 1
+  },
+  {
+   "id": "m99",
+   "project": "data-pipeline",
+   "content": "runbook section search covers scenario 59",
+   "kind": "fact",
+   "importance": 1
+  }
+ ],
+ "queries": [
+  {
+   "id": "q1",
+   "query": "idempotency-key header",
+   "expected": [
+    "m1"
+   ],
+   "category": "lexical",
+   "project": "shop-api"
+  },
+  {
+   "id": "q2",
+   "query": "rate limiting requests per minute",
+   "expected": [
+    "m2"
+   ],
+   "category": "lexical",
+   "project": "shop-api"
+  },
+  {
+   "id": "q3",
+   "query": "webhook HMAC-SHA256 signature",
+   "expected": [
+    "m3"
+   ],
+   "category": "lexical",
+   "project": "shop-api"
+  },
+  {
+   "id": "q4",
+   "query": "refunds manual finance approval",
+   "expected": [
+    "m4"
+   ],
+   "category": "lexical",
+   "project": "shop-api"
+  },
+  {
+   "id": "q5",
+   "query": "how do we authenticate users",
+   "expected": [
+    "m5"
+   ],
+   "category": "semantic",
+   "project": "mobile-app"
+  },
+  {
+   "id": "q6",
+   "query": "when does content reload",
+   "expected": [
+    "m6"
+   ],
+   "category": "semantic",
+   "project": "mobile-app"
+  },
+  {
+   "id": "q7",
+   "query": "error telemetry policy",
+   "expected": [
+    "m7"
+   ],
+   "category": "semantic",
+   "project": "mobile-app"
+  },
+  {
+   "id": "q8",
+   "query": "configuración de producción",
+   "expected": [
+    "m8"
+   ],
+   "category": "diacritics",
+   "project": "infra"
+  },
+  {
+   "id": "q9",
+   "query": "despliegue automático miércoles",
+   "expected": [
+    "m9"
+   ],
+   "category": "diacritics",
+   "project": "infra"
+  },
+  {
+   "id": "q10",
+   "query": "kubernetes restart behaviour",
+   "expected": [
+    "m10"
+   ],
+   "category": "entity",
+   "project": "infra"
+  },
+  {
+   "id": "q11",
+   "query": "airflow schedule",
+   "expected": [
+    "m11"
+   ],
+   "category": "entity",
+   "project": "data-pipeline"
+  },
+  {
+   "id": "q12",
+   "query": "order storage engine",
+   "expected": [
+    "m13"
+   ],
+   "category": "current",
+   "project": "shop-api"
+  },
+  {
+   "id": "q13",
+   "query": "order storage engine",
+   "expected": [
+    "m12"
+   ],
+   "category": "as_of",
+   "project": "shop-api",
+   "as_of_days_ago": 60
+  },
+  {
+   "id": "q14",
+   "query": "backup cadence",
+   "expected": [
+    "m15"
+   ],
+   "category": "current",
+   "project": "infra"
+  },
+  {
+   "id": "q15",
+   "query": "backup cadence",
+   "expected": [
+    "m14"
+   ],
+   "category": "as_of",
+   "project": "infra",
+   "as_of_days_ago": 100
+  },
+  {
+   "id": "q16",
+   "query": "indentation preference",
+   "expected": [
+    "m16"
+   ],
+   "category": "global",
+   "project": "shop-api"
+  },
+  {
+   "id": "q17",
+   "query": "arm64 mac 16gb ram",
+   "expected": [
+    "m17"
+   ],
+   "category": "global",
+   "project": "mobile-app"
+  },
+  {
+   "id": "q18",
+   "query": "ingestion pipeline batching",
+   "expected": [
+    "m18"
+   ],
+   "category": "dual",
+   "project": "data-pipeline"
+  },
+  {
+   "id": "q19",
+   "query": "staging environment resets database",
+   "expected": [
+    "m20"
+   ],
+   "category": "lexical",
+   "project": "shop-api"
+  },
+  {
+   "id": "q20",
+   "query": "product images cdn bucket",
+   "expected": [
+    "m21"
+   ],
+   "category": "lexical",
+   "project": "shop-api"
+  },
+  {
+   "id": "q21",
+   "query": "tax service stubbed local",
+   "expected": [
+    "m22"
+   ],
+   "category": "lexical",
+   "project": "shop-api"
+  },
+  {
+   "id": "q22",
+   "query": "feature flags environment boot",
+   "expected": [
+    "m23"
+   ],
+   "category": "lexical",
+   "project": "shop-api"
+  },
+  {
+   "id": "q23",
+   "query": "admin panel server side rendering",
+   "expected": [
+    "m24"
+   ],
+   "category": "lexical",
+   "project": "shop-api"
+  },
+  {
+   "id": "q24",
+   "query": "design system spacing steps",
+   "expected": [
+    "m25"
+   ],
+   "category": "lexical",
+   "project": "mobile-app"
+  },
+  {
+   "id": "q25",
+   "query": "push notifications batched campaign",
+   "expected": [
+    "m26"
+   ],
+   "category": "lexical",
+   "project": "mobile-app"
+  },
+  {
+   "id": "q26",
+   "query": "onboarding flow three screens",
+   "expected": [
+    "m27"
+   ],
+   "category": "lexical",
+   "project": "mobile-app"
+  },
+  {
+   "id": "q27",
+   "query": "settings screen licenses",
+   "expected": [
+    "m29"
+   ],
+   "category": "lexical",
+   "project": "mobile-app"
+  },
+  {
+   "id": "q28",
+   "query": "terraform state remote bucket",
+   "expected": [
+    "m30"
+   ],
+   "category": "lexical",
+   "project": "infra"
+  },
+  {
+   "id": "q29",
+   "query": "alerts page on call rotation",
+   "expected": [
+    "m31"
+   ],
+   "category": "lexical",
+   "project": "infra"
+  },
+  {
+   "id": "q30",
+   "query": "secrets rotate quarter",
+   "expected": [
+    "m32"
+   ],
+   "category": "lexical",
+   "project": "infra"
+  },
+  {
+   "id": "q31",
+   "query": "vpn required database access",
+   "expected": [
+    "m33"
+   ],
+   "category": "lexical",
+   "project": "infra"
+  },
+  {
+   "id": "q32",
+   "query": "staging certificates renew automatically",
+   "expected": [
+    "m34"
+   ],
+   "category": "lexical",
+   "project": "infra"
+  },
+  {
+   "id": "q33",
+   "query": "schema changes migration review",
+   "expected": [
+    "m35"
+   ],
+   "category": "lexical",
+   "project": "data-pipeline"
+  },
+  {
+   "id": "q34",
+   "query": "late events dropped two hours",
+   "expected": [
+    "m36"
+   ],
+   "category": "lexical",
+   "project": "data-pipeline"
+  },
+  {
+   "id": "q35",
+   "query": "warehouse compacts partitions weekly",
+   "expected": [
+    "m37"
+   ],
+   "category": "lexical",
+   "project": "data-pipeline"
+  },
+  {
+   "id": "q36",
+   "query": "sampling disabled production",
+   "expected": [
+    "m38"
+   ],
+   "category": "lexical",
+   "project": "data-pipeline"
+  },
+  {
+   "id": "q37",
+   "query": "duplicate events removed event id",
+   "expected": [
+    "m39"
+   ],
+   "category": "lexical",
+   "project": "data-pipeline"
+  },
+  {
+   "id": "q38",
+   "query": "dark mode system setting",
+   "expected": [
+    "m28"
+   ],
+   "category": "lexical",
+   "project": "mobile-app"
+  },
+  {
+   "id": "q39",
+   "query": "which vaults hold infrastructure snapshots",
+   "expected": [
+    "m30"
+   ],
+   "category": "semantic",
+   "project": "infra"
+  },
+  {
+   "id": "q40",
+   "query": "who gets woken up by incidents",
+   "expected": [
+    "m31"
+   ],
+   "category": "semantic",
+   "project": "infra"
+  },
+  {
+   "id": "q41",
+   "query": "night theme behaviour",
+   "expected": [
+    "m28"
+   ],
+   "category": "semantic",
+   "project": "mobile-app"
+  },
+  {
+   "id": "q42",
+   "query": "how are straggler records handled",
+   "expected": [
+    "m36"
+   ],
+   "category": "semantic",
+   "project": "data-pipeline"
+  },
+  {
+   "id": "q43",
+   "query": "credential rollover policy",
+   "expected": [
+    "m32"
+   ],
+   "category": "semantic",
+   "project": "infra"
+  },
+  {
+   "id": "q44",
+   "query": "first run walkthrough",
+   "expected": [
+    "m27"
+   ],
+   "category": "semantic",
+   "project": "mobile-app"
+  },
+  {
+   "id": "q45",
+   "query": "duplicated telemetry cleanup",
+   "expected": [
+    "m39"
+   ],
+   "category": "semantic",
+   "project": "data-pipeline"
+  },
+  {
+   "id": "q46",
+   "query": "monitoring visualization location",
+   "expected": [
+    "m19"
+   ],
+   "category": "semantic",
+   "project": "data-pipeline"
+  },
+  {
+   "id": "q47",
+   "query": "checkout retries use the idempotency-key header on POST /orders",
+   "expected": [
+    "m1"
+   ],
+   "category": "lexical",
+   "project": "shop-api"
+  },
+  {
+   "id": "q48",
+   "query": "orders are stored in PostgreSQL",
+   "expected": [
+    "m13"
+   ],
+   "category": "current",
+   "project": "shop-api"
+  },
+  {
+   "id": "q49",
+   "query": "backups run nightly at 03:00 UTC",
+   "expected": [
+    "m15"
+   ],
+   "category": "current",
+   "project": "infra"
+  },
+  {
+   "id": "q50",
+   "query": "the user prefers 2-space indentation in every language",
+   "expected": [
+    "m16"
+   ],
+   "category": "global",
+   "project": "data-pipeline"
+  }
+ ]
+}
