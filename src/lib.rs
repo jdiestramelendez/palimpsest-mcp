@@ -11,5 +11,6 @@ pub mod config;
 pub mod core;
 pub mod db;
 pub mod error;
+pub mod http;
 pub mod providers;
 pub mod tools;

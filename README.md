@@ -135,6 +135,7 @@ To make agents do this reliably, drop the skill template from
 
 ```sh
 palimpsest-mcp                                   # serve MCP over stdio (default)
+palimpsest-mcp --http 127.0.0.1:8321             # serve over streamable HTTP
 palimpsest-mcp ingest --transcript notes.txt \
     --project my-app [--format claude-jsonl]     # manual ingestion (idempotent)
 palimpsest-mcp hook session-start                # Claude Code hook entry points
@@ -169,6 +170,17 @@ embedding in docs, with `--as-of` to snapshot a past instant.
 
 Ingestion is idempotent: the same transcript content (sha256) is never
 processed twice, so lifecycle hooks firing repeatedly are no-ops.
+
+### HTTP transport
+
+`--http` serves the same tool set over MCP streamable HTTP at `/mcp` —
+useful to share one memory across machines. Binding anything other than
+localhost **requires** a bearer token in `PALIMPSEST_HTTP_TOKEN` (clients
+send `Authorization: Bearer <token>`); the server refuses to start
+unauthenticated on a public address. TLS is out of scope by design: put a
+reverse proxy (caddy, nginx) in front for anything beyond a trusted LAN.
+SQLite stays single-writer — concurrent clients are safe (writes are
+serialized) but throughput-limited.
 
 ## Retrieval quality
 

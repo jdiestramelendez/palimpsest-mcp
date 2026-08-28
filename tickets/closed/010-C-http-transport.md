@@ -1,6 +1,6 @@
 # 010 · [C] Streamable HTTP transport (shared memory across machines)
 
-**Priority:** C · **Status:** pending
+**Priority:** C · **Status:** done
 
 ## Context
 stdio covers the single-machine case. Sharing one memory across machines
@@ -22,8 +22,13 @@ stdio covers the single-machine case. Sharing one memory across machines
   supported path.
 
 ## Acceptance criteria
-- [ ] Same tool set reachable over HTTP; stdio unchanged by default.
-- [ ] Non-localhost bind without a token refuses to start.
+- [x] Same tool set reachable over HTTP; stdio unchanged by default
+      (initialize verified over real HTTP: 200 + serverInfo; stdio path
+      untouched).
+- [x] Non-localhost bind without a token refuses to start (blank tokens
+      count as missing; IPv6 loopback recognized as local); with a token,
+      missing/wrong Authorization gets 401, correct token 200 — verified
+      in tests and against the real binary.
 
 ## Out of scope
 Multi-tenant auth/scoping; sync/replication between two DB files.

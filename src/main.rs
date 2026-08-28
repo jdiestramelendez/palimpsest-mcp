@@ -31,6 +31,12 @@ struct Cli {
     #[arg(long, global = true)]
     db_path: Option<PathBuf>,
 
+    /// Serve MCP over streamable HTTP on this address (e.g.
+    /// 127.0.0.1:8321) instead of stdio. Non-localhost binds REQUIRE the
+    /// PALIMPSEST_HTTP_TOKEN env var (Authorization: Bearer <token>).
+    #[arg(long)]
+    http: Option<std::net::SocketAddr>,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -130,7 +136,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_path = config.resolve_db_path(cli.db_path.as_deref());
 
     match cli.command {
-        None => serve(&config, &db_path).await,
+        None => match cli.http {
+            Some(addr) => serve_http(&config, &db_path, addr).await,
+            None => serve(&config, &db_path).await,
+        },
         Some(Command::Ingest {
             transcript,
             project,
@@ -219,6 +228,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+}
+
+/// Serve the MCP tool set over streamable HTTP.
+async fn serve_http(
+    config: &Config,
+    db_path: &std::path::Path,
+    addr: std::net::SocketAddr,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use palimpsest_mcp::http;
+
+    let token = std::env::var(http::TOKEN_ENV).ok();
+    http::validate_http_binding(&addr, token.as_deref())?;
+
+    let db = Db::open(db_path, config.embedder.dims)?;
+    db.set_meta_if_absent(
+        palimpsest_mcp::db::admin::META_EMBEDDER_MODEL,
+        &config.embedder.model,
+    )?;
+    let (embedder, extractor) = providers::from_config(config)?;
+    let server = MemoryServer::new(db, embedder, extractor)
+        .with_retrieval_config(config.retrieval)
+        .with_review_config(config.review);
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    tracing::info!(
+        addr = %listener.local_addr()?,
+        auth = token.is_some(),
+        "palimpsest-mcp serving over streamable HTTP at /mcp"
+    );
+    http::serve_http(server, listener, token).await?;
+    Ok(())
 }
 
 /// Serve the MCP tool set over stdio.
