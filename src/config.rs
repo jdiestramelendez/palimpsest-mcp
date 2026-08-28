@@ -86,6 +86,27 @@ impl Default for ExtractorConfig {
     }
 }
 
+/// Retrieval scoring knobs (`[retrieval]` in config.toml).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RetrievalConfig {
+    /// Weight of the recency boost: final score is multiplied by
+    /// `1 + recency_weight * exp(-age_days / recency_half_life_days)`.
+    /// 0 disables the boost entirely.
+    pub recency_weight: f64,
+    /// Half-life (days) of the recency boost decay.
+    pub recency_half_life_days: f64,
+}
+
+impl Default for RetrievalConfig {
+    fn default() -> Self {
+        Self {
+            recency_weight: 0.25,
+            recency_half_life_days: 30.0,
+        }
+    }
+}
+
 /// Top-level configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -96,6 +117,8 @@ pub struct Config {
     pub extractor: ExtractorConfig,
     /// Database path override; defaults to `~/.palimpsest-mcp/palimpsest.db`.
     pub db_path: Option<PathBuf>,
+    /// Retrieval scoring knobs.
+    pub retrieval: RetrievalConfig,
 }
 
 impl Config {

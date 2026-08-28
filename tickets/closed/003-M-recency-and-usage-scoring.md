@@ -1,6 +1,6 @@
 # 003 · [M] Recency and usage signals in scoring
 
-**Priority:** M · **Status:** pending
+**Priority:** M · **Status:** done
 
 ## Context
 Ranking today is RRF + importance tie-break. Recency and access frequency
@@ -27,9 +27,10 @@ matter (claude-mem weighs recency 30%); usage data also feeds ticket 009
 - Migration: idempotent ALTER TABLE ADD COLUMN guarded by schema_version.
 
 ## Acceptance criteria
-- [ ] Fresh memory outranks an equally-scored stale one; boost is bounded.
-- [ ] Usage counters increment on search hits; `as_of` searches don't.
-- [ ] Config knobs respected; defaults sensible with no config file.
+- [x] Fresh memory outranks an equally-scored stale one; boost is bounded
+      (multiplier capped at 1 + weight).
+- [x] Usage counters increment on search hits; `as_of` searches don't.
+- [x] Config knobs respected; defaults sensible with no config file.
 
 ## Out of scope
 Automatic pruning or archiving (ticket 009).

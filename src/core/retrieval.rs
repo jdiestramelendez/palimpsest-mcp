@@ -22,6 +22,17 @@ const PER_SIGNAL_TOP: usize = 20;
 /// so we pull extra neighbours and rank the survivors.
 const KNN_OVERFETCH: usize = 200;
 
+/// Recency boost parameters (from `[retrieval]` config). `None` disables
+/// the boost — always the case for `as_of` searches, which rank by
+/// historical relevance only.
+#[derive(Debug, Clone, Copy)]
+pub struct RecencyBoost {
+    /// Boost weight; multiplier is `1 + weight * exp(-age/half_life)`.
+    pub weight: f64,
+    /// Half-life in days.
+    pub half_life_days: f64,
+}
+
 /// Search parameters (already validated by the tool layer).
 #[derive(Debug, Clone)]
 pub struct SearchParams {
@@ -34,6 +45,8 @@ pub struct SearchParams {
     pub limit: usize,
     /// Normalized ISO 8601 UTC instant for time-travel; `None` = now.
     pub as_of: Option<String>,
+    /// Recency boost; ignored (treat as disabled) when `as_of` is set.
+    pub recency: Option<RecencyBoost>,
 }
 
 /// One search hit.
@@ -198,8 +211,7 @@ pub fn search(
          FROM ({unions}) c
          JOIN memories m ON m.id = c.memory_id
          {joins}
-         ORDER BY score DESC, m.importance DESC, m.id DESC
-         LIMIT :limit",
+         ORDER BY score DESC, m.importance DESC, m.id DESC",
         ctes = ctes.join(", "),
         score = score_terms.join(" + "),
         unions = unions.join(" UNION "),
@@ -211,7 +223,6 @@ pub fn search(
     let mut named: Vec<(&str, Value)> = vec![
         (":embedding", Value::Blob(embedding_to_blob(query_embedding))),
         (":knn", Value::Integer(KNN_OVERFETCH as i64)),
-        (":limit", Value::Integer(params.limit as i64)),
     ];
     if let Some(fts) = &fts_query {
         named.push((":fts", Value::Text(fts.clone())));
@@ -243,9 +254,39 @@ pub fn search(
                 valid_at: row.get("valid_at")?,
                 invalid_at: row.get("invalid_at")?,
                 superseded_by: row.get("superseded_by")?,
+                last_retrieved_at: row.get("last_retrieved_at")?,
+                retrieval_count: row.get("retrieval_count")?,
             },
             score: row.get("score")?,
         })
     })?;
-    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Error::from)
+    let mut hits = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+
+    // Recency boost (current-time searches only): multiply the RRF score
+    // by 1 + w * exp(-age_days / half_life), computed here rather than in
+    // SQL so no math-function build flags are required. The fused pool is
+    // small (<= 3 legs x top-20), so re-ranking in memory is free.
+    if params.as_of.is_none() {
+        if let Some(recency) = params.recency.filter(|r| r.weight > 0.0) {
+            let now = chrono::Utc::now();
+            for hit in &mut hits {
+                let age_days = DateTime::parse_from_rfc3339(&hit.memory.valid_at)
+                    .map(|t| (now - t.with_timezone(&Utc)).num_seconds() as f64 / 86_400.0)
+                    .unwrap_or(f64::MAX)
+                    .max(0.0);
+                let boost = 1.0
+                    + recency.weight * (-age_days / recency.half_life_days.max(0.001)).exp();
+                hit.score *= boost;
+            }
+            hits.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then(b.memory.importance.cmp(&a.memory.importance))
+                    .then(b.memory.id.cmp(&a.memory.id))
+            });
+        }
+    }
+    hits.truncate(params.limit);
+    Ok(hits)
 }

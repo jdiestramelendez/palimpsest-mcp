@@ -19,7 +19,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::core::ingest::{self, IngestOutcome};
-use crate::core::retrieval::{self, SearchParams};
+use crate::config::RetrievalConfig;
+use crate::core::retrieval::{self, RecencyBoost, SearchParams};
 use crate::db::queries::{self, NewMemory, MEMORY_KINDS};
 use crate::db::Db;
 use crate::error::Error;
@@ -41,6 +42,7 @@ pub struct MemoryServer {
     db: Arc<Mutex<Db>>,
     embedder: Arc<dyn Embedder>,
     extractor: Arc<dyn Extractor>,
+    retrieval_config: RetrievalConfig,
     tool_router: ToolRouter<Self>,
 }
 
@@ -147,8 +149,15 @@ impl MemoryServer {
             db: Arc::new(Mutex::new(db)),
             embedder,
             extractor,
+            retrieval_config: RetrievalConfig::default(),
             tool_router: Self::tool_router(),
         }
+    }
+
+    /// Set the retrieval scoring knobs (builder style).
+    pub fn with_retrieval_config(mut self, config: RetrievalConfig) -> Self {
+        self.retrieval_config = config;
+        self
     }
 
     /// Create a server sharing an existing database handle (tests use this
@@ -162,6 +171,7 @@ impl MemoryServer {
             db,
             embedder,
             extractor,
+            retrieval_config: RetrievalConfig::default(),
             tool_router: Self::tool_router(),
         }
     }
@@ -364,14 +374,27 @@ impl MemoryServer {
             None => None,
         };
 
+        let is_historical = as_of.is_some();
         let search_params = SearchParams {
             project_id,
             kinds: req.kinds.clone(),
             limit: req.limit.unwrap_or(8).clamp(1, 50),
             as_of,
+            recency: (!is_historical).then_some(RecencyBoost {
+                weight: self.retrieval_config.recency_weight,
+                half_life_days: self.retrieval_config.recency_half_life_days,
+            }),
         };
         match retrieval::search(conn, &query, &embedding, &search_params) {
             Ok(hits) => {
+                // Usage tracking: current-time hits only; historical
+                // queries must not disturb the usage signal.
+                if !is_historical {
+                    let ids: Vec<i64> = hits.iter().map(|h| h.memory.id).collect();
+                    if let Err(e) = queries::bump_retrieval(conn, &ids) {
+                        tracing::warn!(error = %e, "usage bump failed (results unaffected)");
+                    }
+                }
                 let results: Vec<serde_json::Value> = hits
                     .iter()
                     .map(|h| serde_json::json!({

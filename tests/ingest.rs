@@ -143,7 +143,7 @@ fn v1_database_is_migrated_to_current_on_open() {
         .conn()
         .query_row("SELECT value FROM meta WHERE key = 'schema_version'", [], |r| r.get(0))
         .expect("version");
-    assert_eq!(version, "3");
+    assert_eq!(version, "4");
     let graph_tables: i64 = db
         .conn()
         .query_row(

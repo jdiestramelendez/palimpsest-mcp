@@ -16,7 +16,7 @@ document that is rewritten at the end of each session.
 |---|---|
 | `get_project_state` | Load a project's STATE.md, aliases and memory counts. Call at session start. |
 | `save_memory` | Save one durable fact (optionally superseding an outdated one). |
-| `search_memory` | Hybrid search with project scoping, kind filters and `as_of` time-travel. |
+| `search_memory` | Hybrid search (vector + lexical + entity signals, recency-boosted) with project scoping, kind filters and `as_of` time-travel. |
 | `get_related` | Explore the knowledge graph around an entity (1-2 hops, with evidence). |
 | `end_session` | Persist the transcript, extract durable facts, rewrite STATE.md. |
 
@@ -44,6 +44,11 @@ dims = 768                   # pinned into the DB at first creation;
                              # changing it later requires re-embedding
 # base_url = "http://localhost:11434"
 # api_key_env = "OPENAI_API_KEY"      # env var read for cloud providers
+
+[retrieval]
+recency_weight = 0.25        # score multiplier: 1 + w * exp(-age/half_life)
+recency_half_life_days = 30  # 0 weight disables the boost; as_of searches
+                             # never apply it
 
 [extractor]
 provider = "ollama"          # "ollama" | "anthropic" | "openai"
@@ -136,9 +141,12 @@ processed twice, so lifecycle hooks firing repeatedly are no-ops.
 
 ## Guarantees
 
-- **Append-only history**: no memory row is ever hard-deleted or edited;
-  corrections insert a replacement and stamp `invalid_at`/`superseded_by`
-  on the old row in the same transaction.
+- **Append-only history**: no memory row is ever hard-deleted and content
+  is never edited; corrections insert a replacement and stamp
+  `invalid_at`/`superseded_by` on the old row in the same transaction.
+  (The only other mutable fields are the usage-tracking columns
+  `last_retrieved_at`/`retrieval_count`, bumped when a current-time search
+  returns a memory.)
 - **Atomic writes**: the vector index row is inserted in the same
   transaction as the memory row; FTS stays in sync via triggers.
 - **Validity-filtered retrieval**: searches only return currently-valid

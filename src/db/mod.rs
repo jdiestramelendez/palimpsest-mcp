@@ -18,7 +18,7 @@ use crate::error::{Error, Result};
 const SCHEMA_TEMPLATE: &str = include_str!("schema.sql");
 
 /// Schema version recorded in `meta` (bump on migration-worthy changes).
-const SCHEMA_VERSION: &str = "3";
+const SCHEMA_VERSION: &str = "4";
 
 static VEC_INIT: Once = Once::new();
 
@@ -114,6 +114,16 @@ impl Db {
         Ok(Self { conn, dims })
     }
 
+    /// Whether `table` already has `column` (migration idempotency guard).
+    fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+        let n: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+            [table, column],
+            |r| r.get(0),
+        )?;
+        Ok(n > 0)
+    }
+
     /// Bring an existing database up to the current schema version. Each
     /// step is idempotent and bumps `meta.schema_version`.
     fn migrate(conn: &Connection) -> Result<()> {
@@ -125,9 +135,11 @@ impl Db {
             .and_then(|v| v.parse().ok())
             .unwrap_or(1);
         if version < 2 {
+            if !Self::column_exists(conn, "sessions", "transcript_hash")? {
+                conn.execute_batch("ALTER TABLE sessions ADD COLUMN transcript_hash TEXT")?;
+            }
             conn.execute_batch(
-                "ALTER TABLE sessions ADD COLUMN transcript_hash TEXT;
-                 CREATE INDEX IF NOT EXISTS idx_sessions_hash ON sessions(transcript_hash);",
+                "CREATE INDEX IF NOT EXISTS idx_sessions_hash ON sessions(transcript_hash)",
             )?;
         }
         if version < 3 {
@@ -143,7 +155,13 @@ impl Db {
                 .unwrap_or(graph_ddl);
             conn.execute_batch(graph_ddl)?;
         }
-        if version < 3 || version < 2 {
+        if version < 4 && !Self::column_exists(conn, "memories", "last_retrieved_at")? {
+            conn.execute_batch(
+                "ALTER TABLE memories ADD COLUMN last_retrieved_at TEXT;
+                 ALTER TABLE memories ADD COLUMN retrieval_count INTEGER NOT NULL DEFAULT 0;",
+            )?;
+        }
+        if version < 4 {
             conn.execute(
                 "INSERT INTO meta (key, value) VALUES ('schema_version', ?1)
                  ON CONFLICT(key) DO UPDATE SET value = ?1",

@@ -45,7 +45,11 @@ CREATE TABLE IF NOT EXISTS memories (
     created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     valid_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     invalid_at        TEXT,                          -- NULL = currently valid
-    superseded_by     INTEGER REFERENCES memories(id)
+    superseded_by     INTEGER REFERENCES memories(id),
+    -- Usage tracking (schema v4). The ONLY mutable columns of a memory;
+    -- content and validity stay append-only/supersession.
+    last_retrieved_at TEXT,
+    retrieval_count   INTEGER NOT NULL DEFAULT 0
 );
 
 -- Partial index: the hot path only ever scans currently-valid memories.

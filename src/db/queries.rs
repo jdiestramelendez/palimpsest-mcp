@@ -51,6 +51,10 @@ pub struct Memory {
     pub invalid_at: Option<String>,
     /// The memory that replaced this one, if superseded.
     pub superseded_by: Option<i64>,
+    /// When this memory last matched a search (usage tracking).
+    pub last_retrieved_at: Option<String>,
+    /// How many searches this memory has matched (usage tracking).
+    pub retrieval_count: i64,
 }
 
 /// Fields for inserting a new memory.
@@ -147,6 +151,8 @@ fn row_to_memory(row: &Row<'_>) -> rusqlite::Result<Memory> {
         valid_at: row.get("valid_at")?,
         invalid_at: row.get("invalid_at")?,
         superseded_by: row.get("superseded_by")?,
+        last_retrieved_at: row.get("last_retrieved_at")?,
+        retrieval_count: row.get("retrieval_count")?,
     })
 }
 
@@ -503,6 +509,26 @@ pub fn entity_neighborhood(
     }
     nodes.sort_by_key(|n| (n.hops, n.id));
     Ok((nodes, edges))
+}
+
+/// Record that these memories matched a current-time search. This is the
+/// ONLY sanctioned UPDATE on memories besides supersession stamping, and it
+/// touches exclusively the usage-tracking columns — never content/validity.
+pub fn bump_retrieval(conn: &Connection, memory_ids: &[i64]) -> Result<()> {
+    if memory_ids.is_empty() {
+        return Ok(());
+    }
+    let placeholders = vec!["?"; memory_ids.len()].join(", ");
+    let sql = format!(
+        "UPDATE memories
+         SET last_retrieved_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+             retrieval_count = retrieval_count + 1
+         WHERE id IN ({placeholders})"
+    );
+    let params: Vec<&dyn rusqlite::types::ToSql> =
+        memory_ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+    conn.execute(&sql, params.as_slice())?;
+    Ok(())
 }
 
 /// Persist a session transcript (with its dedup hash). Returns the session id.

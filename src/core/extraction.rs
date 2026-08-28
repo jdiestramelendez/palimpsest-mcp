@@ -255,6 +255,7 @@ pub async fn run_pipeline(
                 kinds: None,
                 limit: CONFLICT_CANDIDATES,
                 as_of: None,
+                recency: None,
             },
         )?;
 
