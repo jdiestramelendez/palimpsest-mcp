@@ -54,6 +54,19 @@ enum Command {
         #[arg(long, value_parser = ["text", "claude-jsonl"], default_value = "text")]
         format: String,
     },
+    /// Export the knowledge graph: interactive HTML (default), Mermaid
+    /// (.mmd) or Graphviz DOT (.dot), chosen by the --out extension.
+    Graph {
+        /// Scope to one project (global entities always included).
+        #[arg(long)]
+        project: Option<String>,
+        /// Render the graph as it was at this ISO 8601 instant.
+        #[arg(long)]
+        as_of: Option<String>,
+        /// Output file: .html, .mmd or .dot.
+        #[arg(long, default_value = "graph.html")]
+        out: PathBuf,
+    },
     /// Claude Code lifecycle hook entry points (hook JSON on stdin).
     Hook {
         #[command(subcommand)]
@@ -108,6 +121,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _ => raw,
             };
             run_ingest(&config, &db_path, project, &client, &text).await
+        }
+        Some(Command::Graph { project, as_of, out }) => {
+            export_graph(&config, &db_path, project, as_of, &out)
         }
         Some(Command::Hook { event }) => {
             let payload: HookPayload = serde_json::from_reader(std::io::stdin())
@@ -205,6 +221,49 @@ async fn run_ingest(
             std::process::exit(1);
         }
     }
+    Ok(())
+}
+
+/// Export the knowledge graph to HTML / Mermaid / DOT.
+fn export_graph(
+    config: &Config,
+    db_path: &std::path::Path,
+    project: Option<String>,
+    as_of: Option<String>,
+    out: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use palimpsest_mcp::core::{graphviz, retrieval};
+
+    let db = Db::open(db_path, config.embedder.dims)?;
+    let project_id = match &project {
+        Some(name) => Some(
+            queries::resolve_project(db.conn(), name)?
+                .ok_or_else(|| format!("project '{name}' not found"))?
+                .id,
+        ),
+        None => None,
+    };
+    let as_of_norm = as_of.as_deref().map(retrieval::normalize_as_of).transpose()?;
+    let (nodes, edges) = queries::graph_export(db.conn(), project_id.as_deref())?;
+    if nodes.is_empty() {
+        eprintln!("the graph is empty — entities appear once sessions are ingested");
+    }
+
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    let t = as_of_norm.clone().unwrap_or(now);
+    let title = match &project_id {
+        Some(p) => format!("{p} — knowledge graph"),
+        None => "knowledge graph — all projects".to_string(),
+    };
+    let ext = out.extension().and_then(|e| e.to_str()).unwrap_or("html");
+    let rendered = match ext {
+        "mmd" => graphviz::render_mermaid(&nodes, &edges, &t),
+        "dot" => graphviz::render_dot(&nodes, &edges, &t),
+        "html" => graphviz::render_html(&nodes, &edges, &title, as_of_norm.as_deref()),
+        other => return Err(format!("unsupported extension '.{other}': use .html, .mmd or .dot").into()),
+    };
+    std::fs::write(out, rendered)?;
+    println!("{} nodes, {} edges -> {}", nodes.len(), edges.len(), out.display());
     Ok(())
 }
 

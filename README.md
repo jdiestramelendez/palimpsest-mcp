@@ -134,7 +134,15 @@ palimpsest-mcp ingest --transcript notes.txt \
     --project my-app [--format claude-jsonl]     # manual ingestion (idempotent)
 palimpsest-mcp hook session-start                # Claude Code hook entry points
 palimpsest-mcp hook session-end                  #   (hook JSON on stdin)
+palimpsest-mcp graph --project my-app \
+    --out graph.html                             # knowledge graph viewer
 ```
+
+`graph` exports the knowledge graph: a **self-contained HTML viewer**
+(force layout, hover tooltips with the evidence memory, and a time slider
+that replays how your knowledge evolved — superseded facts drop off as you
+move forward in time), or `.mmd` (Mermaid) / `.dot` (Graphviz) for
+embedding in docs, with `--as-of` to snapshot a past instant.
 
 Ingestion is idempotent: the same transcript content (sha256) is never
 processed twice, so lifecycle hooks firing repeatedly are no-ops.

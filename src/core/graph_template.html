@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>palimpsest — knowledge graph</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --surface: #ffffff; --panel: #f4f4f2;
+    --text-primary: #1a1a19; --text-secondary: #5c5b54; --border: #d9d8d2;
+    --k-technology: #2a78d6; --k-project: #eb6834; --k-concept: #1baf7a;
+    --k-person: #8a897f; --k-other: #8a897f;   /* neutral fold: person/other */
+    --edge: #b8b7ae;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface: #1a1a19; --panel: #232322;
+      --text-primary: #ffffff; --text-secondary: #c3c2b7; --border: #3a3936;
+      --k-technology: #3987e5; --k-project: #d95926; --k-concept: #199e70;
+      --k-person: #8a897f; --k-other: #8a897f;
+      --edge: #55544e;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--surface); color: var(--text-primary);
+         font: 14px/1.45 system-ui, sans-serif; height: 100vh;
+         display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+           padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 15px; font-weight: 600; }
+  .legend { display: flex; gap: 14px; color: var(--text-secondary); font-size: 12px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px;
+                         border-radius: 50%; margin-right: 5px; background: var(--c); }
+  .time { display: flex; align-items: center; gap: 8px; margin-left: auto;
+          color: var(--text-secondary); font-size: 12px; }
+  .time input { width: 220px; accent-color: var(--k-technology); }
+  #stage { flex: 1; cursor: grab; }
+  #tip { position: fixed; display: none; max-width: 340px; pointer-events: none;
+         background: var(--panel); color: var(--text-primary); border: 1px solid var(--border);
+         border-radius: 6px; padding: 8px 10px; font-size: 12px; z-index: 2; }
+  #tip .muted { color: var(--text-secondary); }
+  #empty { position: fixed; inset: 0; display: none; place-items: center;
+           color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">knowledge graph</h1>
+  <div class="legend">
+    <span style="--c: var(--k-technology)">technology</span>
+    <span style="--c: var(--k-project)">project</span>
+    <span style="--c: var(--k-concept)">concept</span>
+    <span style="--c: var(--k-person)">person / other</span>
+  </div>
+  <div class="time">
+    <span id="tlabel"></span>
+    <input id="slider" type="range" min="0" max="1000" value="1000"
+           aria-label="Time travel: show the graph as it was at this instant">
+  </div>
+</header>
+<canvas id="stage"></canvas>
+<div id="tip"></div>
+<div id="empty">no knowledge at this instant — drag the slider forward</div>
+<script>
+const DATA = /*DATA*/;
+const canvas = document.getElementById("stage"), tip = document.getElementById("tip");
+const ctx = canvas.getContext("2d");
+document.getElementById("title").textContent = DATA.title;
+
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const kindColor = (k) => css("--k-" + (["technology","project","concept","person"].includes(k) ? k : "other"));
+
+// ── time domain ──────────────────────────────────────────────────────────
+const stamps = [];
+for (const n of DATA.nodes) for (const w of n.windows) { stamps.push(w[0]); if (w[1]) stamps.push(w[1]); }
+const NOW = new Date().toISOString();
+stamps.push(NOW);
+stamps.sort();
+const T0 = stamps.length > 1 ? stamps[0] : NOW, T1 = NOW;
+const slider = document.getElementById("slider"), tlabel = document.getElementById("tlabel");
+const lerpTime = (f) => {
+  const a = Date.parse(T0), b = Date.parse(T1);
+  return new Date(a + (b - a) * f).toISOString();
+};
+let currentT = DATA.initialTime || NOW;
+if (DATA.initialTime) {
+  const a = Date.parse(T0), b = Date.parse(T1), v = Date.parse(DATA.initialTime);
+  slider.value = b > a ? Math.round(1000 * Math.min(1, Math.max(0, (v - a) / (b - a)))) : 1000;
+}
+
+const inWindow = (v, i, t) => v <= t && (!i || i > t);
+const nodeAlive = (n, t) => n.windows.some((w) => inWindow(w[0], w[1], t));
+const edgeAlive = (e, t) => inWindow(e.valid_at, e.invalid_at, t);
+
+// ── layout state ─────────────────────────────────────────────────────────
+const nodes = DATA.nodes.map((n, i) => ({
+  ...n,
+  x: Math.cos(i * 2.4) * (60 + 14 * Math.sqrt(i)),   // phyllotaxis seed
+  y: Math.sin(i * 2.4) * (60 + 14 * Math.sqrt(i)),
+  vx: 0, vy: 0,
+  r: 6 + 3 * Math.sqrt(Math.max(1, n.windows.length)),
+}));
+const byId = new Map(nodes.map((n) => [n.id, n]));
+const edges = DATA.edges.map((e) => ({ ...e, s: byId.get(e.source), t: byId.get(e.target) }));
+
+let view = { x: 0, y: 0, k: 1 }, live = { nodes: [], edges: [] }, warm = 300;
+
+function refilter() {
+  live.nodes = nodes.filter((n) => nodeAlive(n, currentT));
+  live.edges = edges.filter((e) => edgeAlive(e, currentT) && nodeAlive(e.s, currentT) && nodeAlive(e.t, currentT));
+  document.getElementById("empty").style.display = live.nodes.length ? "none" : "grid";
+  tlabel.textContent = currentT.slice(0, 10) + (currentT >= NOW.slice(0, 10) ? " (now)" : "");
+  warm = Math.max(warm, 120);
+}
+
+function step() {
+  // Repulsion + springs + gentle centering — a tiny force sim is enough
+  // at personal-knowledge scale (hundreds of nodes).
+  const N = live.nodes;
+  for (let i = 0; i < N.length; i++) for (let j = i + 1; j < N.length; j++) {
+    const a = N[i], b = N[j];
+    let dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy || 1;
+    const f = Math.min(1200 / d2, 6), d = Math.sqrt(d2);
+    dx /= d; dy /= d;
+    a.vx -= f * dx; a.vy -= f * dy; b.vx += f * dx; b.vy += f * dy;
+  }
+  for (const e of live.edges) {
+    let dx = e.t.x - e.s.x, dy = e.t.y - e.s.y;
+    const d = Math.sqrt(dx * dx + dy * dy) || 1, want = 90;
+    const f = 0.02 * (d - want);
+    dx /= d; dy /= d;
+    e.s.vx += f * dx; e.s.vy += f * dy; e.t.vx -= f * dx; e.t.vy -= f * dy;
+  }
+  for (const n of N) {
+    n.vx -= n.x * 0.003; n.vy -= n.y * 0.003;
+    n.x += (n.vx *= 0.85); n.y += (n.vy *= 0.85);
+  }
+}
+
+function draw() {
+  const w = canvas.width = canvas.clientWidth * devicePixelRatio;
+  const h = canvas.height = canvas.clientHeight * devicePixelRatio;
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  ctx.translate(canvas.clientWidth / 2 + view.x, canvas.clientHeight / 2 + view.y);
+  ctx.scale(view.k, view.k);
+
+  ctx.strokeStyle = css("--edge"); ctx.lineWidth = 1.5;
+  for (const e of live.edges) {
+    ctx.beginPath(); ctx.moveTo(e.s.x, e.s.y); ctx.lineTo(e.t.x, e.t.y); ctx.stroke();
+  }
+  ctx.font = "11px system-ui, sans-serif";
+  ctx.fillStyle = css("--text-secondary");
+  for (const e of live.edges) {
+    // Skip labels on edges too short to label legibly (tooltip covers them).
+    const dx = e.t.x - e.s.x, dy = e.t.y - e.s.y;
+    if (dx * dx + dy * dy < 70 * 70) continue;
+    ctx.fillText(e.predicate, (e.s.x + e.t.x) / 2 + 4, (e.s.y + e.t.y) / 2 - 4);
+  }
+  for (const n of live.nodes) {
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 7);
+    ctx.fillStyle = kindColor(n.kind); ctx.fill();
+    // 2px surface ring so overlapping nodes stay separable
+    ctx.lineWidth = 2; ctx.strokeStyle = css("--surface"); ctx.stroke();
+  }
+  ctx.fillStyle = css("--text-primary");
+  ctx.font = "12px system-ui, sans-serif";
+  for (const n of live.nodes) ctx.fillText(n.name, n.x + n.r + 5, n.y + 4);
+  ctx.restore();
+}
+
+function loop() { if (warm > 0) { step(); warm--; } draw(); requestAnimationFrame(loop); }
+refilter(); loop();
+
+// ── interaction: pan, zoom, hover ────────────────────────────────────────
+const toWorld = (px, py) => ({
+  x: (px - canvas.clientWidth / 2 - view.x) / view.k,
+  y: (py - canvas.clientHeight / 2 - view.y) / view.k,
+});
+let dragging = null;
+canvas.addEventListener("pointerdown", (ev) => { dragging = { x: ev.clientX, y: ev.clientY }; canvas.style.cursor = "grabbing"; });
+addEventListener("pointerup", () => { dragging = null; canvas.style.cursor = "grab"; });
+addEventListener("pointermove", (ev) => {
+  if (dragging) {
+    view.x += ev.clientX - dragging.x; view.y += ev.clientY - dragging.y;
+    dragging = { x: ev.clientX, y: ev.clientY };
+    return;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const p = toWorld(ev.clientX - rect.left, ev.clientY - rect.top);
+  const node = live.nodes.find((n) => (n.x - p.x) ** 2 + (n.y - p.y) ** 2 < (n.r + 6) ** 2);
+  let hit = null;
+  if (node) {
+    hit = `<b>${node.name}</b><br><span class="muted">${node.kind}${node.project_id ? " · " + node.project_id : " · global"} · ${node.windows.length} mention(s)</span>`;
+  } else {
+    for (const e of live.edges) {
+      const dx = e.t.x - e.s.x, dy = e.t.y - e.s.y, len2 = dx * dx + dy * dy || 1;
+      const u = Math.max(0, Math.min(1, ((p.x - e.s.x) * dx + (p.y - e.s.y) * dy) / len2));
+      const qx = e.s.x + u * dx - p.x, qy = e.s.y + u * dy - p.y;
+      if (qx * qx + qy * qy < 36) {
+        hit = `<b>${e.s.name} —${e.predicate}→ ${e.t.name}</b><br><span class="muted">memory #${e.evidence_memory_id}: ${e.evidence}</span>`;
+        break;
+      }
+    }
+  }
+  if (hit) { tip.innerHTML = hit; tip.style.display = "block";
+    tip.style.left = Math.min(ev.clientX + 14, innerWidth - 360) + "px";
+    tip.style.top = ev.clientY + 14 + "px";
+  } else tip.style.display = "none";
+});
+canvas.addEventListener("wheel", (ev) => {
+  ev.preventDefault();
+  view.k = Math.min(4, Math.max(0.2, view.k * (ev.deltaY < 0 ? 1.1 : 0.9)));
+}, { passive: false });
+slider.addEventListener("input", () => { currentT = lerpTime(slider.value / 1000); refilter(); });
+</script>
+</body>
+</html>

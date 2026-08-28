@@ -1,6 +1,6 @@
 # 006 · [M] Knowledge graph visualization and export
 
-**Priority:** M · **Status:** pending
+**Priority:** M · **Status:** done
 **Depends on:** 002
 
 ## Context
@@ -27,11 +27,14 @@ with append-only validity metadata we can show how it evolved over time.
 - Respect scope rules: `--project` includes global entities, same as search.
 
 ## Acceptance criteria
-- [ ] `graph --out g.html` opens offline in a browser and renders nodes,
-      edges and tooltips.
-- [ ] Time slider (or `--as-of`) hides edges whose evidence memory was
-      superseded after/before the chosen instant.
-- [ ] Mermaid/DOT exports are syntactically valid.
+- [x] `graph --out g.html` opens offline in a browser and renders nodes,
+      edges and tooltips (verified headless in Chromium: rendered, zero JS
+      errors, screenshots taken).
+- [x] Time slider (or `--as-of`) hides edges whose evidence memory was
+      superseded after/before the chosen instant (verified visually and in
+      tests: Heroku shows in June, Fly.io shows now).
+- [x] Mermaid/DOT exports are syntactically valid (Mermaid validated with
+      the official renderer; DOT structure asserted in tests).
 
 ## Out of scope
 Live web UI / served dashboard; graph editing.

@@ -577,3 +577,107 @@ pub fn update_project_state(conn: &Connection, project_id: &str, state_md: &str)
     )?;
     Ok(())
 }
+
+/// A node in a full-graph export, with the validity windows of the
+/// memories that mention it (drives the time slider in the HTML view).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ExportNode {
+    /// Entity id.
+    pub id: i64,
+    /// Display name.
+    pub name: String,
+    /// Entity kind.
+    pub kind: String,
+    /// Owning project (`None` = global entity).
+    pub project_id: Option<String>,
+    /// `(valid_at, invalid_at)` windows of mentioning memories.
+    pub windows: Vec<(String, Option<String>)>,
+}
+
+/// An edge in a full-graph export, carrying its evidence window.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ExportEdge {
+    /// Source entity id.
+    pub source: i64,
+    /// Relation label.
+    pub predicate: String,
+    /// Target entity id.
+    pub target: i64,
+    /// Evidence memory id.
+    pub evidence_memory_id: i64,
+    /// Evidence memory content (truncated for tooltips).
+    pub evidence: String,
+    /// When the evidence became true.
+    pub valid_at: String,
+    /// When it stopped being current (`None` = still valid).
+    pub invalid_at: Option<String>,
+}
+
+/// Whole-graph export for visualization: every entity and relation in
+/// scope (chosen project OR global; `None` = everything), including
+/// superseded evidence — validity windows let viewers time-travel.
+pub fn graph_export(
+    conn: &Connection,
+    project_id: Option<&str>,
+) -> Result<(Vec<ExportNode>, Vec<ExportEdge>)> {
+    let scope = match project_id {
+        Some(_) => "AND (e.project_id = :pid OR e.project_id IS NULL)",
+        None => "",
+    };
+    let mut stmt = conn.prepare(&format!(
+        "SELECT e.id, e.name, e.kind, e.project_id FROM entities e WHERE 1=1 {scope} ORDER BY e.id"
+    ))?;
+    let bind: Vec<(&str, &dyn rusqlite::types::ToSql)> = match &project_id {
+        Some(pid) => vec![(":pid", pid as &dyn rusqlite::types::ToSql)],
+        None => vec![],
+    };
+    let mut nodes = stmt
+        .query_map(bind.as_slice(), |r| {
+            Ok(ExportNode {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                kind: r.get(2)?,
+                project_id: r.get(3)?,
+                windows: Vec::new(),
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let mut win_stmt = conn.prepare(
+        "SELECT m.valid_at, m.invalid_at FROM memory_entities me
+         JOIN memories m ON m.id = me.memory_id
+         WHERE me.entity_id = ?1 ORDER BY m.valid_at",
+    )?;
+    for node in &mut nodes {
+        node.windows = win_stmt
+            .query_map([node.id], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+    }
+
+    let node_ids: std::collections::HashSet<i64> = nodes.iter().map(|n| n.id).collect();
+    let mut edge_stmt = conn.prepare(
+        "SELECT r.source_entity_id, r.predicate, r.target_entity_id,
+                r.evidence_memory_id, m.content, m.valid_at, m.invalid_at
+         FROM relations r JOIN memories m ON m.id = r.evidence_memory_id
+         ORDER BY r.id",
+    )?;
+    let edges = edge_stmt
+        .query_map([], |r| {
+            let content: String = r.get(4)?;
+            Ok(ExportEdge {
+                source: r.get(0)?,
+                predicate: r.get(1)?,
+                target: r.get(2)?,
+                evidence_memory_id: r.get(3)?,
+                evidence: content.chars().take(140).collect(),
+                valid_at: r.get(5)?,
+                invalid_at: r.get(6)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?
+        .into_iter()
+        .filter(|e| node_ids.contains(&e.source) && node_ids.contains(&e.target))
+        .collect();
+
+    Ok((nodes, edges))
+}
