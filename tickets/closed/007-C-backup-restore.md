@@ -1,6 +1,6 @@
 # 007 · [C] backup / restore subcommands
 
-**Priority:** C · **Status:** pending
+**Priority:** C · **Status:** done
 
 ## Context
 A single SQLite file holds a user's entire accumulated memory. One corrupt
@@ -21,9 +21,13 @@ disk without a backup story is fatal trust damage.
 - Consider a `--keep N` rotation flag for backups.
 
 ## Acceptance criteria
-- [ ] Backup taken during active writes opens clean and passes
-      integrity_check.
-- [ ] Restore swaps atomically and keeps the previous file.
+- [x] Backup taken during active writes opens clean and passes
+      integrity_check (taken with a live WAL connection open; FTS intact).
+- [x] Restore swaps atomically and keeps the previous file
+      (.pre-restore-<ts>, with -wal/-shm siblings); verification runs on a
+      scratch copy so the backup source is never mutated; dims mismatch
+      and corrupt files are refused with the live DB untouched. --keep N
+      rotation implemented for the default backups directory.
 
 ## Out of scope
 Scheduled/automatic backups; cloud replication (litestream is the DIY

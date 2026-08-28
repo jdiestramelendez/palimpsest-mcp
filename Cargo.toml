@@ -8,7 +8,7 @@ license = "MIT"
 [dependencies]
 rmcp = { version = "3.1", features = ["server", "transport-io", "macros", "schemars"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "signal"] }
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 sqlite-vec = "0.1.9"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

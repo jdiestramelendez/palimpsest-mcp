@@ -5,6 +5,7 @@
 //! dimensionality is pinned in the `meta` table at first creation and the DB
 //! refuses to open when the configured dims differ.
 
+pub mod admin;
 pub mod queries;
 
 use std::path::Path;

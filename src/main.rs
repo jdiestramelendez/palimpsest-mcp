@@ -54,6 +54,21 @@ enum Command {
         #[arg(long, value_parser = ["text", "claude-jsonl"], default_value = "text")]
         format: String,
     },
+    /// Take an online backup of the database (safe while the server runs).
+    Backup {
+        /// Destination file (default: ~/.palimpsest-mcp/backups/palimpsest-<ts>.db).
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Keep only the newest N backups in the default directory.
+        #[arg(long)]
+        keep: Option<usize>,
+    },
+    /// Restore the database from a backup file. The current database is
+    /// verified-swapped: it is renamed aside (.pre-restore-*), never deleted.
+    Restore {
+        /// Backup file to restore from.
+        source: PathBuf,
+    },
     /// Export the knowledge graph: interactive HTML (default), Mermaid
     /// (.mmd) or Graphviz DOT (.dot), chosen by the --out extension.
     Graph {
@@ -121,6 +136,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _ => raw,
             };
             run_ingest(&config, &db_path, project, &client, &text).await
+        }
+        Some(Command::Backup { out, keep }) => {
+            let dest = palimpsest_mcp::db::admin::backup_database(&db_path, out, keep)?;
+            println!("backup written to {}", dest.display());
+            Ok(())
+        }
+        Some(Command::Restore { source }) => {
+            let aside = palimpsest_mcp::db::admin::restore_database(
+                &db_path,
+                &source,
+                config.embedder.dims,
+            )?;
+            println!(
+                "restored {} from {} (previous database kept at {})",
+                db_path.display(),
+                source.display(),
+                aside.display()
+            );
+            Ok(())
         }
         Some(Command::Graph { project, as_of, out }) => {
             export_graph(&config, &db_path, project, as_of, &out)

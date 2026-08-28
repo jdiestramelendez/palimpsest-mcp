@@ -141,7 +141,17 @@ palimpsest-mcp hook session-start                # Claude Code hook entry points
 palimpsest-mcp hook session-end                  #   (hook JSON on stdin)
 palimpsest-mcp graph --project my-app \
     --out graph.html                             # knowledge graph viewer
+palimpsest-mcp backup [--out f] [--keep N]       # online snapshot (WAL-safe)
+palimpsest-mcp restore <file>                    # verified swap; old DB kept
 ```
+
+`backup` snapshots the live database with SQLite's backup API (safe while
+the server is running); defaults land in `~/.palimpsest-mcp/backups/` and
+`--keep N` rotates old ones. `restore` verifies the file on a scratch copy
+(integrity check + embedding-dims match) before swapping it in, and the
+previous database is renamed `.pre-restore-<ts>` — never deleted. For
+continuous off-site replication, point [litestream](https://litestream.io)
+at the database file.
 
 `graph` exports the knowledge graph: a **self-contained HTML viewer**
 (force layout, hover tooltips with the evidence memory, and a time slider
